@@ -1,0 +1,12 @@
+name: test-notify
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    uses: Pawrise/.github/.github/workflows/notify-discord.yml@main
+    secrets:
+      webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    with:
+      repo: Pawrise/pawrise-assistant
+      branch: test-org-secret
+      run-url: https://github.com/Pawrise/pawrise-assistant/actions
