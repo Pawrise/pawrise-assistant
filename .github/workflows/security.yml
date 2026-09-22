@@ -4,14 +4,3 @@ on: [push, pull_request]
 jobs:
   secret-scan:
     uses: Pawrise/.github/.github/workflows/secret-scan.yml@main
-
-  notify:
-    needs: [secret-scan]
-    if: failure() && github.event_name == 'push'
-    uses: Pawrise/.github/.github/workflows/notify-discord.yml@main
-    secrets:
-      webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-    with:
-      repo: ${{ github.repository }}
-      branch: ${{ github.ref_name }}
-      run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
