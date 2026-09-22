@@ -1,0 +1,6 @@
+name: security
+on: [push, pull_request]
+
+jobs:
+  secret-scan:
+    uses: Pawrise/.github/.github/workflows/secret-scan.yml@main
