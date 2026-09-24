@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_LOCKED: "1"
+
+jobs:
+  quality:
+    name: Lint · types · tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Installer uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Installer les dépendances
+        run: uv sync --locked
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check --output-format=github .
+
+      - name: Types
+        run: uv run mypy src
+
+      # La couverture est bloquante (--cov-fail-under=80, voir pyproject.toml).
+      # Cible 90 % sur les nœuds 1 et 6 dès le lot 3 : ils portent la conformité
+      # anti-diagnostic (conception §6).
+      - name: Tests
+        run: uv run pytest
+
+  image:
+    name: Image conteneur
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Installer buildx
+        # Le driver docker par défaut ne supporte pas l'export de cache.
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Construire l'image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: pawrise-assistant:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
