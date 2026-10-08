@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pawrise_assistant.graph.deps import SEED_CORPUS
@@ -27,3 +28,10 @@ class Settings(BaseSettings):
     """Vide pour OpenAI ; l'URL de la ressource Azure OpenAI (`…/openai/v1/`) en cible EU."""
     llm_model_nano: str = "gpt-5.4-nano"
     llm_model_main: str = "gpt-5.4"
+
+    retriever: Literal["memory", "postgres"] = "memory"
+    database_url: str | None = None
+    """Chaîne de connexion libpq, ex. `postgresql://pawrise@127.0.0.1:5433/pawrise`."""
+    embedder: Literal["hash", "openai"] = "hash"
+    reranker: Literal["overlap", "cohere"] = "overlap"
+    cohere_token: SecretStr | None = None

@@ -29,11 +29,10 @@ from pawrise_assistant.api.events import (
 from pawrise_assistant.api.scenarios import SCENARIOS, Scenario
 from pawrise_assistant.api.settings import Settings
 from pawrise_assistant.components.audit import JsonlAuditSink
-from pawrise_assistant.core_api.client import HttpCoreApi
 from pawrise_assistant.domain.models import AlertContext, AssistantResponse, Turn, TurnRequest
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.builder import build_graph
-from pawrise_assistant.graph.deps import FAULTS, Deps, dev_deps, llm_deps
+from pawrise_assistant.graph.deps import FAULTS, Deps
 from pawrise_assistant.graph.replay import ReplayError, RunRegistry, debug_checkpointer, fork_config
 from pawrise_assistant.graph.topology import Topology, build_handoff_topology, build_topology
 from pawrise_assistant.handoff.graph import (
@@ -42,7 +41,7 @@ from pawrise_assistant.handoff.graph import (
     generate_handoff_summary,
 )
 from pawrise_assistant.handoff.models import HandoffRequest, HandoffSummary
-from pawrise_assistant.llm.provider import OpenAIProvider
+from pawrise_assistant.wiring import build_deps
 
 
 class DebugRunRequest(BaseModel):
@@ -69,19 +68,7 @@ def initial_state(req: TurnRequest) -> AssistantState:
 def create_app(settings: Settings | None = None, deps: Deps | None = None) -> FastAPI:
     settings = settings or Settings()
     if deps is None:
-        audit = JsonlAuditSink(settings.audit_path)
-        if settings.llm == "openai":
-            provider = OpenAIProvider.from_env(
-                {"nano": settings.llm_model_nano, "main": settings.llm_model_main},
-                base_url=settings.llm_base_url,
-            )
-            deps = llm_deps(provider, audit=audit, corpus_dir=settings.corpus_dir)
-        else:
-            deps = dev_deps(audit=audit, corpus_dir=settings.corpus_dir)
-        if settings.core_api_url:
-            from dataclasses import replace
-
-            deps = replace(deps, core_api=HttpCoreApi(settings.core_api_url))
+        deps = build_deps(settings, JsonlAuditSink(settings.audit_path))
     graph = build_graph()
     handoff_graph = build_handoff_graph()
     topologies = {"turn": build_topology(graph), "handoff": build_handoff_topology(handoff_graph)}

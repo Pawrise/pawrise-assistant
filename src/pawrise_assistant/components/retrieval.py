@@ -118,20 +118,35 @@ class InMemoryHybridRetriever:
         lex = _ranks(self._bm25.scores(stems(query)), top_k)
         qv = _trigrams(query)
         dense = _ranks([_cosine(qv, v) for v in self._vecs], top_k)
-        fused: dict[int, float] = {}
-        for ranks in (lex, dense):
-            for i, r in ranks.items():
-                fused[i] = fused.get(i, 0.0) + 1 / (RRF_K + r)
-        order = sorted(fused, key=lambda i: -fused[i])[:top_k]
-        return [
-            self.chunks[i].with_scores(
-                bm25_rank=lex.get(i, 0),
-                dense_rank=dense.get(i, 0),
-                rrf=round(fused[i], 5),
-                rrf_rank=r,
-            )
-            for r, i in enumerate(order, start=1)
-        ]
+        ids = [c.chunk_id for c in self.chunks]
+        return rrf_fuse(
+            [ids[i] for i in sorted(lex, key=lex.__getitem__)],
+            [ids[i] for i in sorted(dense, key=dense.__getitem__)],
+            {c.chunk_id: c for c in self.chunks},
+            top_k,
+        )
+
+
+def rrf_fuse(
+    lexical: list[str], dense: list[str], by_id: dict[str, Chunk], top_k: int
+) -> list[Chunk]:
+    """Reciprocal Rank Fusion : chaque liste (ordonnée) contribue 1 / (k + rang)."""
+    lex = {cid: r for r, cid in enumerate(lexical, start=1)}
+    den = {cid: r for r, cid in enumerate(dense, start=1)}
+    fused = {
+        cid: sum(1 / (RRF_K + ranks[cid]) for ranks in (lex, den) if cid in ranks)
+        for cid in {*lex, *den}
+    }
+    order = sorted(fused, key=lambda cid: (-fused[cid], cid))[:top_k]
+    return [
+        by_id[cid].with_scores(
+            bm25_rank=lex.get(cid, 0),
+            dense_rank=den.get(cid, 0),
+            rrf=round(fused[cid], 5),
+            rrf_rank=r,
+        )
+        for r, cid in enumerate(order, start=1)
+    ]
 
 
 class OverlapRelevanceFilter:

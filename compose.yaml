@@ -1,0 +1,15 @@
+# Base locale pour le lot 4 : `docker compose up -d db`, puis `uv run ingest`.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: pawrise
+      POSTGRES_DB: pawrise
+      POSTGRES_HOST_AUTH_METHOD: trust  # dev local uniquement, port lié à 127.0.0.1
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

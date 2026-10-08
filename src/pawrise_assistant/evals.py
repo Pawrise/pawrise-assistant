@@ -81,8 +81,8 @@ def _ratio(ok: int, total: int) -> float:
     return ok / total if total else 1.0
 
 
-async def evaluate(directory: Path = EVALS_DIR) -> Report:
-    graph, deps = build_graph(), dev_deps()
+async def evaluate(directory: Path = EVALS_DIR, deps: Deps | None = None) -> Report:
+    graph, deps = build_graph(), deps or dev_deps()
     sets = {n: load(n, directory) for n in ("adversarial", "escalation", "qa_medical")}
     results = {
         n: [(c, await _run_case(graph, deps, c)) for c in cases] for n, cases in sets.items()
@@ -192,7 +192,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="KPI de l'assistant sur les jeux d'évaluation.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    report = asyncio.run(evaluate())
+    from pawrise_assistant.api.settings import Settings
+    from pawrise_assistant.components.audit import MemoryAuditSink
+    from pawrise_assistant.wiring import build_deps
+
+    report = asyncio.run(evaluate(deps=build_deps(Settings(), MemoryAuditSink())))
     if args.json:
         print(
             json.dumps(
