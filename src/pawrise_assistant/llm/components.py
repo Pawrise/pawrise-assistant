@@ -9,14 +9,15 @@ Principe : le LLM ajoute de la couverture, il ne retire jamais une règle.
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from pawrise_assistant.components.generation import apply_faults
-from pawrise_assistant.components.guardrail import GuardrailContext, RuleGuardrail
+from pawrise_assistant.components.guardrail import GuardrailContext, RuleGuardrail, is_vet_referral
 from pawrise_assistant.components.intent import IntentResult, RuleIntentClassifier
-from pawrise_assistant.components.understanding import Understanding
+from pawrise_assistant.components.understanding import RuleQueryUnderstanding, Understanding
 from pawrise_assistant.domain.models import (
     TELEMETRY_SOURCE,
     AlertContext,
@@ -70,7 +71,7 @@ class UnderstandingOut(BaseModel):
 
 class LLMQueryUnderstanding:
     def __init__(self, provider: LLMProvider) -> None:
-        self.provider = provider
+        self.provider, self.rules = provider, RuleQueryUnderstanding()
 
     async def understand(self, message: str, alert: AlertContext | None) -> Understanding:
         user = message if alert is None else f"{message}\n\n[Contexte : alerte « {alert.summary} »]"
@@ -86,7 +87,11 @@ class LLMQueryUnderstanding:
         query = f"{out.canonical_query} · {message}"
         if alert is not None:  # flux B : le contexte de l'alerte est toujours chargé
             return Understanding(query, True, 7, 7)
-        return Understanding(query, out.needs_retrieval, out.telemetry_days, out.alerts_days)
+        # Sauter la recherche, c'est répondre sans source : il faut que les règles ET le LLM
+        # y voient un simple échange courant. Le LLM seul ne peut pas en décider.
+        ruled = await self.rules.understand(message, None)
+        needs = out.needs_retrieval or ruled.needs_retrieval
+        return Understanding(query, needs, out.telemetry_days, out.alerts_days)
 
 
 # — Nœud 5 —
@@ -114,6 +119,10 @@ def _context(message: str, pet: PetContext | None, chunks: list[Chunk]) -> str:
             + "\n".join(f"[{c.chunk_id}] {c.source} · {c.section} : {c.text}" for c in chunks)
         )
     return "\n\n".join(parts)
+
+
+def _strip_emoji(text: str) -> str:
+    return re.sub(r"[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F]", "", text).strip()
 
 
 class SmallTalkOut(BaseModel):
@@ -146,7 +155,7 @@ class LLMGenerator:
                 schema=SmallTalkOut,
                 max_tokens=80,
             )
-            return DraftAnswer(response_text=reply.text)
+            return DraftAnswer(response_text=_strip_emoji(reply.text))
         system = prompts.load("generation")
         if hardened:
             system += "\n\n" + prompts.load("generation_hardened")
@@ -209,7 +218,8 @@ class LLMGuardrail:
         checks = [
             ClaimCheck(
                 text=r.text,
-                grounded=r.grounded and (i in llm and llm[i].supported),
+                grounded=r.grounded
+                and ((i in llm and llm[i].supported) or is_vet_referral(r.text)),
                 diagnostic=r.diagnostic or (i in llm and llm[i].diagnostic),
                 source_ids=r.source_ids,
             )

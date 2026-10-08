@@ -53,6 +53,17 @@ class GuardrailContext:
     alert: AlertContext | None
 
 
+_VET_REFERRAL = re.compile(
+    r"\bveterinaire\b.{0,40}\b(consult|avis|examin|contact|appel|voir|montr)"
+    r"|\b(consult|avis|examin|contact|appel|voir|montr)\w*\b.{0,40}\bveterinaire\b"
+)
+
+
+def is_vet_referral(text: str) -> bool:
+    """Une invitation à consulter : pas besoin de source, tant qu'elle n'affirme rien sur le chien."""
+    return bool(_VET_REFERRAL.search(fold(text))) and not is_diagnostic(text)
+
+
 def is_diagnostic(text: str) -> bool:
     t = fold(text).replace("'", " ").replace("’", " ")
     return any(re.search(p, t) for p in _DIAGNOSTIC)
@@ -103,7 +114,8 @@ class RuleGuardrail:
         checks = [
             ClaimCheck(
                 text=c.text,
-                grounded=bool(c.source_ids) and set(c.source_ids) <= allowed,
+                grounded=(bool(c.source_ids) and set(c.source_ids) <= allowed)
+                or is_vet_referral(c.text),
                 diagnostic=is_diagnostic(c.text),
                 source_ids=c.source_ids,
             )
