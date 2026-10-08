@@ -76,9 +76,25 @@ async def run_turn(
         thread_id="live", turn_id="1", pet_ref=pet, user_message=message, alert_context=alert
     )
     t0 = time.perf_counter()
-    out = await graph.ainvoke(initial_state(req), context=deps.for_run(frozenset(faults)))
+    started: dict[str, float] = {}
+    timings: list[str] = []
+    out: dict[str, Any] = {}
+    async for part in graph.astream(
+        initial_state(req),
+        context=deps.for_run(frozenset(faults)),
+        stream_mode=["tasks", "values"],
+        version="v2",
+    ):
+        if part["type"] == "values":
+            out = part["data"]
+        elif "input" in part["data"]:
+            started[part["data"]["id"]] = time.perf_counter()
+        elif part["data"]["id"] in started:
+            ms = (time.perf_counter() - started.pop(part["data"]["id"])) * 1000
+            timings.append(f"{part['data']['name']} {ms:.0f} ms")
     r = out["response"]
     return {
+        "timings": timings,
         "path": " > ".join(r.metadata.path),
         "template": r.metadata.template_id,
         "intent": out.get("intent"),
