@@ -78,3 +78,73 @@ async def test_small_talk_reply_is_cleaned_of_emoji() -> None:
         message="Merci", pet=None, chunks=[], hardened=False, faults=frozenset()
     )
     assert d.response_text == "Avec plaisir !"
+
+
+async def test_restating_the_owner_message_is_a_valid_source() -> None:
+    """3ᵉ passage réel : « le propriétaire indique qu'il a avalé un raisin » était rejeté."""
+    text = "Vous indiquez qu'il a avalé un raisin."
+    ctx = GuardrailContext(user_message="Il a avalé un raisin", chunks=[], pet=None, alert=None)
+    draft = DraftAnswer(response_text=text, claims=[Claim(text=text, source_ids=["message"])])
+    assert (await RuleGuardrail().check(draft, ctx)).passed
+
+
+async def test_an_urgent_signal_wins_even_off_topic() -> None:
+    """3ᵉ passage réel : « chewing-gum au xylitol » classé hors sujet, sans vétérinaire."""
+    from pawrise_assistant.api.app import initial_state
+    from pawrise_assistant.components.audit import MemoryAuditSink
+    from pawrise_assistant.domain.models import TurnRequest
+    from pawrise_assistant.graph.builder import build_graph
+    from pawrise_assistant.graph.deps import llm_deps
+    from pawrise_assistant.llm.components import IntentOut
+
+    p = ScriptedProvider(
+        {"IntentOut": [IntentOut(intent="out_of_scope", confidence=0.8, reason="chewing-gum")]}
+    )
+    deps = llm_deps(p, audit=MemoryAuditSink())
+    req = TurnRequest(
+        thread_id="t",
+        turn_id="1",
+        pet_ref="pet_demo_rex",
+        user_message="Il a mangé un chewing-gum au xylitol",
+    )
+    out = await build_graph().ainvoke(initial_state(req), context=deps.for_run())
+    r = out["response"]
+    assert r.metadata.template_id == "SR-OOS-01"
+    assert r.escalation.urgency == "high"
+    assert r.response_text.startswith("Contactez un vétérinaire dès maintenant")
+
+
+def test_an_active_collar_alert_is_enough_to_escalate() -> None:
+    """3ᵉ passage réel : « elle bouge moins en ce moment » chez Nala, sans escalade."""
+    from pawrise_assistant.components.guardrail import escalation_rules
+    from pawrise_assistant.core_api import fake_data
+    from pawrise_assistant.domain.models import PetContext
+
+    nala = PetContext(
+        telemetry=fake_data.summarize("pet_demo_nala", 2),
+        alerts=fake_data.alerts("pet_demo_nala", 7),
+    )
+    ctx = GuardrailContext(
+        user_message="Elle bouge moins en ce moment", chunks=[], pet=nala, alert=None
+    )
+    esc = escalation_rules(ctx)
+    assert esc.urgency == "medium"
+    assert esc.reason and "A-0192" in esc.reason
+
+
+@pytest.mark.parametrize(
+    ("message", "urgent"),
+    [
+        ("Il a mangé du chocolat mais il a l'air bien", True),
+        ("Il a mangé un chewing-gum au xylitol", True),
+        ("Il a léché de l'antigel", True),
+        ("Il respire mal depuis une heure", True),
+        ("Donne-moi une recette de gâteau au chocolat.", False),
+        ("Le chocolat est-il toxique ?", False),
+    ],
+)
+def test_a_toxic_word_is_urgent_only_when_ingested(message: str, urgent: bool) -> None:
+    from pawrise_assistant.components.guardrail import escalation_rules
+
+    ctx = GuardrailContext(user_message=message, chunks=[], pet=None, alert=None)
+    assert (escalation_rules(ctx).urgency == "high") is urgent

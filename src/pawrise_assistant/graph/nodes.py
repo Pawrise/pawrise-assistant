@@ -350,12 +350,13 @@ async def finalize(state: AssistantState, runtime: Runtime[Deps]) -> Update:
         )
     # Filet de sécurité déterministe : un signal d'urgence dans le message passe devant tout,
     # quelle que soit la sortie (réponse rédigée, encadrée ou de repli).
-    if template_id not in ("SR-JB-01", "SR-ABUSE-01", "SR-OOS-01"):
-        urgent = escalation_rules(
-            GuardrailContext(user_message=state["user_message"], chunks=[], pet=None, alert=None)
-        )
-        if urgent.urgency == "high":
-            escalation = urgent
+    # Sans exception : même un message classé hors sujet ou abusif peut cacher une urgence
+    # (constaté en réel : « chewing-gum au xylitol » classé hors sujet).
+    urgent = escalation_rules(
+        GuardrailContext(user_message=state["user_message"], chunks=[], pet=None, alert=None)
+    )
+    if urgent.urgency == "high":
+        escalation = urgent
     if escalation.urgency == "high":
         text = URGENT_PREFIX + text
     path = [t.node for t in state["trace"]] + ["finalize"]

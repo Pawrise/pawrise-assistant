@@ -17,6 +17,9 @@ AlertKind = Literal["activity_drop", "night_heart_rate", "geofence_exit", "other
 TELEMETRY_SOURCE = "telemetry"
 """Identifiant de source réservé : un claim ancré sur les données du collier, pas sur le corpus."""
 
+MESSAGE_SOURCE = "message"
+"""Identifiant de source réservé : un claim qui reprend ce que le propriétaire a dit lui-même."""
+
 
 class Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")

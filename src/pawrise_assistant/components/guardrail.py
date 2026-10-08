@@ -17,6 +17,7 @@ from typing import Protocol
 
 from pawrise_assistant.components.text import fold, sentences
 from pawrise_assistant.domain.models import (
+    MESSAGE_SOURCE,
     TELEMETRY_SOURCE,
     AlertContext,
     Chunk,
@@ -41,10 +42,14 @@ _DIAGNOSTIC = [
     r"\bpas (besoin|la peine|necessaire) d(e)? ?(consulter|voir un veterinaire|l emmener|appeler)",
 ]
 
+_TOXIC = r"(chocolat|raisins?|xylitol|oignons?|mort aux rats|antigel|poison|toxique|medicaments?)"
+_INGESTED = r"(mange|avale|ingere|croque|leche|bu|pris|bouffe|acces)"
+# Un toxique n'est une urgence que s'il a été ingéré : « une recette au chocolat » n'en est pas une
+# (faux positif constaté lors de la validation réelle). Les signes graves, eux, suffisent seuls.
 URGENT_SIGNALS = re.compile(
-    r"\b(chocolat|raisins?|xylitol|oignons?|mort aux rats|antigel|poison|toxique|empoisonn|"
-    r"ne respire|respire mal|du mal a respirer|convuls|s est effondre|effondrement|"
-    r"ventre (est )?(gonfle|dur)|essaie de vomir|saigne beaucoup|hemorragie|inconscient)"
+    rf"\b{_INGESTED}\w*\b.{{0,40}}\b{_TOXIC}|\b{_TOXIC}\b.{{0,40}}\b{_INGESTED}"
+    r"|\b(empoisonn\w*|ne respire|respire mal|du mal a respirer|convuls\w*|s est effondre|"
+    r"effondrement|ventre (est )?(gonfle|dur)|essaie de vomir|saigne beaucoup|hemorragie|inconscient)"
 )
 
 
@@ -91,6 +96,17 @@ def escalation_rules(ctx: GuardrailContext) -> Escalation:
             urgency="medium",
             reason="R-ESC-03 baisse d'activité ≥ 30 % pendant ≥ 5 jours",
         )
+    active = [
+        a
+        for a in (ctx.pet.alerts if ctx.pet else [])
+        if a.kind == "activity_drop" and a.level in ("vigilance", "action")
+    ]
+    if active:
+        return Escalation(
+            trigger=True,
+            urgency="medium",
+            reason=f"R-ESC-03 alerte active du collier ({active[0].alert_id})",
+        )
     tel = ctx.pet.telemetry if ctx.pet else None
     if tel and tel.period_days >= 5 and tel.activity_delta_pct <= -30:
         return Escalation(
@@ -111,7 +127,7 @@ class RuleGuardrail:
     name = "règles (dev)"
 
     async def check(self, draft: DraftAnswer, ctx: GuardrailContext) -> GuardrailVerdict:
-        allowed = {c.chunk_id for c in ctx.chunks}
+        allowed = {c.chunk_id for c in ctx.chunks} | {MESSAGE_SOURCE}
         if ctx.pet and ctx.pet.telemetry:
             allowed.add(TELEMETRY_SOURCE)
         checks = [

@@ -136,9 +136,7 @@ async def main() -> tuple[str, bool]:
     base = Settings(llm="openai")
     candidates = [
         m.strip()
-        for m in os.environ.get("LIVE_MAIN_MODELS", f"{base.llm_model_main},gpt-5.4-mini").split(
-            ","
-        )
+        for m in os.environ.get("LIVE_MAIN_MODELS", base.llm_model_main).split(",")
         if m.strip()
     ]
     lines = [

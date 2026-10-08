@@ -27,7 +27,9 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     """Vide pour OpenAI ; l'URL de la ressource Azure OpenAI (`…/openai/v1/`) en cible EU."""
     llm_model_nano: str = "gpt-5.4-nano"
-    llm_model_main: str = "gpt-5.4"
+    llm_model_main: str = "gpt-5.4-mini"
+    """Mesuré le 2026-10-08 contre gpt-5.4 : médiane 6,1 s contre 8,8 s, 7× moins cher,
+    mêmes résultats de sécurité (scripts/live_check.py)."""
     llm_reasoning_effort_nano: str | None = "minimal"
     """Classer, reformuler, vérifier : pas besoin de réfléchir longtemps."""
     llm_reasoning_effort_main: str | None = "low"

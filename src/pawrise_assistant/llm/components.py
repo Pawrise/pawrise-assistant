@@ -19,6 +19,7 @@ from pawrise_assistant.components.guardrail import GuardrailContext, RuleGuardra
 from pawrise_assistant.components.intent import IntentResult, RuleIntentClassifier
 from pawrise_assistant.components.understanding import RuleQueryUnderstanding, Understanding
 from pawrise_assistant.domain.models import (
+    MESSAGE_SOURCE,
     TELEMETRY_SOURCE,
     AlertContext,
     Chunk,
@@ -108,7 +109,7 @@ class DraftOut(BaseModel):
 
 
 def _context(message: str, pet: PetContext | None, chunks: list[Chunk]) -> str:
-    parts = [f"Message du propriétaire :\n{message}"]
+    parts = [f"Message du propriétaire [{MESSAGE_SOURCE}] :\n{message}"]
     if pet and pet.telemetry:
         parts.append(f"Données du collier [{TELEMETRY_SOURCE}] :\n{pet.describe()}")
     elif pet and pet.profile:
@@ -196,6 +197,7 @@ class LLMGuardrail:
         if not draft.claims:
             return ruled
         sources = {c.chunk_id: c.text for c in ctx.chunks}
+        sources[MESSAGE_SOURCE] = ctx.user_message
         if ctx.pet and ctx.pet.telemetry:
             sources[TELEMETRY_SOURCE] = ctx.pet.describe()
         lines = []
