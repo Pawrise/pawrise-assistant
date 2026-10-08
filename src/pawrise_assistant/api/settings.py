@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     """Active /debug/* (flux de la console, pannes injectées). À False en prod."""
     audit_path: Path = Path("var/audit.jsonl")
     corpus_dir: Path = SEED_CORPUS
+    evals_dir: Path = Path(__file__).resolve().parents[3] / "evals"
+    """Jeux d'évaluation lancés depuis la console (`POST /debug/evals`)."""
     core_api_url: str | None = None
     """None : Core API simulé en process."""
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]

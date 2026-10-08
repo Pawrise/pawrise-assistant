@@ -441,7 +441,7 @@ Recherche : BM25 top-20 ∥ dense top-20 → fusion RRF → top-20 → reranker 
 | Reranker | Cohere Rerank 3.5 multilingue | ADR-003 |
 | LLM | Interface `LLMProvider` — OpenAI (Azure écarté le 2026-10-08) | ADR-002 |
 | Observabilité | OpenTelemetry + **Langfuse self-hosté** | **pas LangSmith** — hébergement US, contradiction frontale avec la thèse data residency |
-| Console | Vite + React 19 + Tailwind, graphe en grille CSS + SVG | §8 — Discuter, Parcours, Tester |
+| Console | Vite + React 19 + Tailwind, graphe en grille CSS + SVG | §8 — Conversation, Connaissances, Qualité |
 | Tests | pytest + pytest-asyncio | — |
 | Qualité | ruff, mypy strict | — |
 | CI | GitHub Actions | Couverture ≥ 80 % global, **≥ 90 % sur les nœuds 1 et 6** — aligné sur l'engagement de soutenance |
@@ -482,26 +482,29 @@ que le corpus d'amorce est en place (fin du lot 4).
 à l'assistant, sans `dialog`. Elle sert au debug, à la démo de soutenance et, plus tard, à la revue
 clinique.
 
-### 8.1 Trois vues indépendantes
+### 8.1 Trois vues et un mode démo
 
-**Refonte du 2026-10-08**, après un retour d'usage : la première version (graphe ELK, chronologie à
-deux lignes, inspecteur et réponse sur un seul écran) était illisible pour un PO, et inutilisable
-sur téléphone.
+**Refonte du 2026-10-08, en deux temps.** La première console (graphe ELK, chronologie,
+inspecteur sur un seul écran) était illisible pour un PO et inutilisable sur téléphone. La
+deuxième séparait Discuter et Parcours : on ne voyait jamais la réponse se construire. La console
+sert aussi de démonstrateur pour le suivi de projet : tout ce que fait le backend doit pouvoir s'y
+montrer et s'y expliquer.
 
-| Vue | Pour qui, pour quoi | Ce qu'elle montre |
+| Vue | Question à laquelle elle répond | Ce qu'elle montre |
 |---|---|---|
-| **Discuter** | voir le produit comme le propriétaire | Fil de discussion, phrases d'attente du flux SSE (`/v1/turns/stream`), réponse vérifiée, sources repliables, bouton vétérinaire, dossier vétérinaire dans le fil. Chaque réponse mène à son parcours |
-| **Parcours** | comprendre qui fait quoi, et pourquoi | Le graphe complet sur une grille fixe : le chemin principal en colonne, les deux branches parallèles sur la même rangée (« En même temps »), les textes fixes regroupés à droite. Chaque étape dit qui la fait (IA, règle, recherche, texte fixe). Le chemin pris en noir, le reste estompé. Une barre de lecture rejoue le tour ; une étape touchée ouvre son détail |
-| **Tester** | vérifier sans lire de code | Les scénarios avec leur résultat attendu en clair, « Tout lancer », conforme ou différent. Un message libre avec pannes simulées, chacune avec son effet attendu |
+| **Conversation** | Que répond l'assistant, et comment ? | La discussion et le parcours en direct, côte à côte sur ordinateur ; bascule Discussion/Parcours sur tablette ; bandeau d'avancement et parcours plein écran sur téléphone. Pannes simulables depuis la saisie. Une source citée mène à son passage dans Connaissances |
+| **Connaissances** | Sur quoi s'appuie-t-il ? | Fiches santé éditables (modifier, désactiver, ajouter, réinitialiser — ré-indexé aussitôt) ; test de recherche (rangs par les mots, par le sens, fusion, pertinence) ; chiens et collier modifiables ; règles, textes fixes et consignes de l'IA en lecture seule |
+| **Qualité** | Peut-on lui faire confiance ? | Les 48 cas lancés en direct et leurs indicateurs face aux cibles ; les scénarios de référence et leur résultat attendu ; le journal d'audit |
 
-Navigation : onglets en haut à partir de la tablette, barre d'onglets en bas sur téléphone. Le
-détail d'une étape s'ouvre à droite sur grand écran, en panneau par-dessus sur tablette et en
-feuille du bas sur téléphone.
+Le **mode démo** déroule une présentation en quatre temps (répondre juste, se protéger, justifier,
+prouver) : pour chaque fonctionnalité, ce qu'il faut observer et un bouton qui la déclenche. Il
+sert aussi de liste de couverture des fonctionnalités backend.
 
-États d'une étape : en attente · en cours · faite · a changé la suite · rejetée ou en panne · pas
-appelée. Toujours couleur + symbole + mot. Les libellés de condition sont dans les étapes cibles
-(« Quand : diagnostic demandé ou urgence ») plutôt que sur les arêtes ; seuls « rien à chercher » et
-« 2ᵉ essai » restent sur leur rail.
+Le parcours se dessine sur une grille fixe : chemin principal en colonne, branches parallèles sur
+la même rangée (« En même temps »), textes fixes regroupés à droite. Chaque étape dit qui la fait
+(IA, règle, recherche, texte fixe) ; les conditions sont dans les étapes cibles (« Quand : … »).
+États : en attente · en cours · faite · a changé la suite · rejetée ou en panne · pas appelée,
+toujours couleur + symbole + mot.
 
 ### 8.2 Écartées
 
@@ -542,6 +545,29 @@ position réelle des cartes : il reste juste à toute largeur, sans bibliothèqu
 `useChat` pense en messages, pas en nœuds).
 
 **Livré en deux temps** (§10) : graphe vivant au lot 2, chronologie + inspecteur complet au lot 6.
+
+### 8.6 Atelier : connaissances, chiens, règles, évaluations, audit
+
+Routes `/debug` (coupées en prod) qui servent les vues Connaissances et Qualité
+(`api/workbench.py`). Les modifications vivent le temps du process : c'est un bac à sable de
+démonstration, remis d'aplomb par `reset`. Modifier le corpus médical en prod passerait par une
+relecture vétérinaire, pas par ces routes.
+
+| Route | Rôle |
+|---|---|
+| `GET /debug/knowledge` | Fiches et passages, actifs ou non, d'origine, modifiés ou ajoutés |
+| `PATCH` / `DELETE /debug/knowledge/chunks/{id}` | Modifier, désactiver ou supprimer un passage ; ré-indexé aussitôt |
+| `POST /debug/knowledge/documents` · `/reset` | Ajouter une fiche ; revenir au corpus d'amorce |
+| `POST /debug/knowledge/search` | Nœuds 3 et 4 seuls sur une question : rangs plein texte, sens, RRF, score de rerank |
+| `GET /debug/pets` · `PATCH /debug/pets/{ref}` · `POST /debug/pets/reset` | 30 jours de collier ; baisse d'activité, hausse du sommeil, alerte, pour montrer R-ESC-03 |
+| `GET /debug/rules` | Règles en clair avec leur motif réel, textes fixes, consignes IA et leur version |
+| `POST /debug/evals` | Les 48 cas en flux SSE (4 à la fois), puis les KPI ; hors journal d'audit |
+| `GET /debug/audit` | Les derniers tours audités (horodatés), du plus récent au plus ancien |
+
+`KnowledgeBase` (`knowledge.py`) remplace `deps.retriever` et implémente le même protocole :
+en mémoire, l'index est reconstruit ; avec Postgres, seule la ligne touchée est ré-embarquée ou
+retirée. Les données des chiens sont celles du faux Core API ; avec un Core API externe, ces
+routes répondent 409.
 
 ---
 

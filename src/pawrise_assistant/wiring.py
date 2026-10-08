@@ -22,6 +22,7 @@ from pawrise_assistant.components.audit import AuditSink
 from pawrise_assistant.components.retrieval import load_corpus
 from pawrise_assistant.core_api.client import HttpCoreApi
 from pawrise_assistant.graph.deps import Deps, dev_deps, llm_deps
+from pawrise_assistant.knowledge import KnowledgeBase
 from pawrise_assistant.llm.provider import OpenAIProvider
 from pawrise_assistant.rag.embedding import Embedder, HashEmbedder, OpenAIEmbedder
 
@@ -60,7 +61,16 @@ def build_deps(settings: Settings, audit: AuditSink) -> Deps:
     else:
         deps = dev_deps(audit=audit, corpus_dir=settings.corpus_dir)
     if settings.retriever == "postgres":
-        deps = replace(deps, retriever=build_retriever(settings))  # type: ignore[arg-type]
+        from pawrise_assistant.rag.pgstore import PgHybridRetriever
+
+        store = build_retriever(settings)
+        assert isinstance(store, PgHybridRetriever)
+        deps = replace(
+            deps,
+            retriever=KnowledgeBase(
+                load_corpus(settings.corpus_dir), store=store, embedder=store.embedder.name
+            ),
+        )
     if settings.reranker == "cohere":
         from pawrise_assistant.rag.cohere import CohereRelevanceFilter
 

@@ -13,6 +13,7 @@ en dev ; le LLM principal le remplacera (lot 8 bis) sans changer le contrat. `ve
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from itertools import pairwise
 from operator import add
 from typing import Annotated, Any, NotRequired, TypedDict
@@ -199,6 +200,7 @@ async def finalize(state: HandoffState, runtime: Runtime[Deps]) -> dict[str, Any
         raise HandoffInvalid("; ".join(state["problems"]))
     await runtime.context.audit.write(
         {
+            "ts": datetime.now(UTC).isoformat(timespec="seconds"),
             "kind": "handoff_summary",
             "thread_id": state["request"].thread_id,
             "pet_ref": state["request"].pet_ref,

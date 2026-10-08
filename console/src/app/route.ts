@@ -1,25 +1,33 @@
 import { useEffect, useState } from 'react'
 
-export type View = 'chat' | 'flow' | 'test'
+export type View = 'conversation' | 'knowledge' | 'quality'
 
 export interface Route {
   view: View
-  /** Pour la vue Parcours : l'échange affiché. */
+  /** L'onglet de la vue (ex. « fiches », « evaluations »). */
+  tab: string | null
+  /** Un élément précis : un passage du corpus, un chien… */
   id: string | null
 }
 
-const PATHS: Record<View, string> = { chat: 'discuter', flow: 'parcours', test: 'tester' }
-
-export function parse(hash: string): Route {
-  const [path, id] = hash.replace(/^#\/?/, '').split('/')
-  const view = (Object.keys(PATHS) as View[]).find((v) => PATHS[v] === path) ?? 'chat'
-  return { view, id: id || null }
+const PATHS: Record<View, string> = {
+  conversation: 'conversation',
+  knowledge: 'connaissances',
+  quality: 'qualite',
 }
 
-export const href = (view: View, id?: string | null) => `#/${PATHS[view]}${id ? `/${id}` : ''}`
+export function parse(hash: string): Route {
+  const [path, tab, ...rest] = hash.replace(/^#\/?/, '').split('/')
+  const view = (Object.keys(PATHS) as View[]).find((v) => PATHS[v] === path) ?? 'conversation'
+  const id = rest.length ? decodeURIComponent(rest.join('/')) : null
+  return { view, tab: tab || null, id }
+}
 
-export function go(view: View, id?: string | null) {
-  window.location.hash = href(view, id)
+export const href = (view: View, tab?: string | null, id?: string | null) =>
+  `#/${PATHS[view]}${tab ? `/${tab}` : ''}${tab && id ? `/${encodeURIComponent(id)}` : ''}`
+
+export function go(view: View, tab?: string | null, id?: string | null) {
+  window.location.hash = href(view, tab, id)
 }
 
 export function useRoute(): Route {

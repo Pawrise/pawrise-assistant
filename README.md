@@ -33,13 +33,18 @@ curl -N http://127.0.0.1:8100/v1/turns/stream -H 'content-type: application/json
 
 ## La console
 
-Trois vues, sur téléphone, tablette et ordinateur :
+Trois vues, sur téléphone, tablette et ordinateur, et un mode démo :
 
-- **Discuter** : l'assistant tel que le propriétaire le voit, avec les phrases d'attente en direct.
-- **Parcours** : le chemin de chaque réponse, étape par étape. Chaque étape dit qui la fait (IA,
-  règle, recherche, texte fixe) ; on rejoue le tour et on relance depuis n'importe quelle étape.
-- **Tester** : les scénarios et leur résultat attendu, « Tout lancer », et des pannes à simuler
-  (IA, recherche, Core API…) pour vérifier que l'assistant reste prudent.
+- **Conversation** : l'assistant tel que le propriétaire le voit, et à côté son parcours en
+  direct (qui fait chaque étape : IA, règle, recherche, texte fixe). Pannes simulables depuis la
+  zone de saisie ; on rejoue un tour et on le relance depuis n'importe quelle étape.
+- **Connaissances** : les fiches santé (modifier, désactiver, ajouter — ré-indexé aussitôt), un
+  test de recherche avec les scores, les données du collier de Rex et Nala (modifiables), les
+  règles, textes fixes et consignes de l'IA.
+- **Qualité** : les 48 cas d'évaluation lancés en direct avec leurs indicateurs, les scénarios de
+  référence, le journal d'audit.
+- **Démo** : le fil d'une présentation, fonctionnalité par fonctionnalité, avec ce qu'il faut
+  observer et un bouton pour la montrer.
 
 ## Configuration
 

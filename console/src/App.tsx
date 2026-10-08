@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { fetchFaults, fetchInfo, fetchScenarios, fetchTopology, forkRun, runDebug, runHandoff } from '@/api/client'
 import type { DebugEvent, GraphName, Info, Scenario, Topology } from '@/api/types'
 import { go, useRoute } from '@/app/route'
 import { newId, storeReduce, type Entry, type NewEntry } from '@/app/store'
-import { ChatView } from '@/chat/ChatView'
+import { Sheet } from '@/components/Sheet'
 import { Shell } from '@/components/Shell'
-import { FlowView } from '@/flow/FlowView'
-import { TestView } from '@/test/TestView'
+import { ConversationView } from '@/conversation/ConversationView'
+import { DemoGuide, type DemoActions } from '@/demo/DemoGuide'
+import { KnowledgeView } from '@/knowledge/KnowledgeView'
+import { QualityView } from '@/quality/QualityView'
+import { useEvals } from '@/quality/useEvals'
 
 type Streamer = (onEvent: (e: DebugEvent) => void, signal: AbortSignal) => Promise<void>
 
@@ -15,10 +18,13 @@ export default function App() {
   const [entries, dispatch] = useReducer(storeReduce, [])
   const [info, setInfo] = useState<Info | null>(null)
   const [scenarios, setScenarios] = useState<Scenario[]>([])
+  const [allFaults, setAllFaults] = useState<string[]>([])
   const [faults, setFaults] = useState<string[]>([])
   const [topologies, setTopologies] = useState<Partial<Record<GraphName, Topology>>>({})
   const [petRef, setPetRef] = useState('pet_demo_rex')
+  const [demo, setDemo] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const evals = useEvals()
   const entriesRef = useRef(entries)
   useEffect(() => {
     entriesRef.current = entries
@@ -29,7 +35,7 @@ export default function App() {
       .then(([i, s, f, turn, handoff]) => {
         setInfo(i)
         setScenarios(s)
-        setFaults(f)
+        setAllFaults(f)
         setTopologies({ turn, handoff })
       })
       .catch((e: Error) => setLoadError(e.message))
@@ -47,8 +53,9 @@ export default function App() {
     return id
   }, [])
 
+  /** Un message dans la conversation. Les pannes choisies ne valent que pour lui. */
   const ask = useCallback(
-    (message: string, pet: string, alert: Scenario['alert_context'] = null, scenarioId: string | null = null) => {
+    (message: string, opts: { pet: string; alert?: Scenario['alert_context']; scenarioId?: string; faults?: string[] }) => {
       // L'historique reprend les derniers échanges de la discussion, comme dialog le ferait.
       const history = entriesRef.current
         .filter((e) => e.origin === 'chat' && e.graph === 'turn' && e.run.response)
@@ -57,10 +64,16 @@ export default function App() {
           { role: 'owner' as const, content: e.message },
           { role: 'assistant' as const, content: e.run.response?.response_text ?? '' },
         ])
+      const chosen = opts.faults ?? []
+      setFaults([])
       void start(
-        { graph: 'turn', origin: 'chat', message, petRef: pet, scenarioId, faults: [], parent: null },
+        { graph: 'turn', origin: 'chat', message, petRef: opts.pet, scenarioId: opts.scenarioId ?? null, faults: chosen, parent: null },
         (onEvent, signal) =>
-          runDebug({ user_message: message, pet_ref: pet, alert_context: alert, faults: [], history }, onEvent, signal),
+          runDebug(
+            { user_message: message, pet_ref: opts.pet, alert_context: opts.alert ?? null, faults: chosen, history },
+            onEvent,
+            signal,
+          ),
       )
     },
     [start],
@@ -95,26 +108,55 @@ export default function App() {
     for (const s of scenarios) await runScenario(s)
   }, [scenarios, runScenario])
 
-  const runFree = useCallback(
-    (message: string, chosen: string[]) =>
-      void start(
-        { graph: 'turn', origin: 'test', message, petRef: 'pet_demo_rex', scenarioId: null, faults: chosen, parent: null },
-        (onEvent, signal) =>
-          runDebug({ user_message: message, pet_ref: 'pet_demo_rex', alert_context: null, faults: chosen }, onEvent, signal),
-      ),
-    [start],
-  )
-
+  /** Relance un échange depuis une étape : il reste là où il était (discussion ou scénarios). */
   const rerun = useCallback((from: Entry, node: string, attempt: number) => {
     const runId = from.run.runId
     if (!runId) return
     const id = newId()
-    dispatch({ type: 'add', id, entry: { ...from, origin: 'test', parent: { id: from.id, node } } })
-    go('flow', id)
+    dispatch({ type: 'add', id, entry: { ...from, faults: [], parent: { id: from.id, node } } })
     forkRun(runId, { node, attempt, overrides: null, faults: [] }, (event) => dispatch({ type: 'event', id, event })).catch(
       (err: Error) => dispatch({ type: 'failed', id, message: err.message }),
     )
   }, [])
+
+  const labels = useMemo(
+    () =>
+      Object.fromEntries(
+        (topologies.turn?.nodes ?? []).concat(topologies.handoff?.nodes ?? []).map((n) => [n.id, n.label]),
+      ) as Record<string, string>,
+    [topologies],
+  )
+  /** Combien de fois chaque passage a été cité pendant la session. */
+  const cited = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const e of entries) for (const c of e.run.response?.citations ?? []) out[c.source_id] = (out[c.source_id] ?? 0) + 1
+    return out
+  }, [entries])
+
+  const demoActions = useMemo<DemoActions>(
+    () => ({
+      scenario: (id, extra) => {
+        const s = scenarios.find((x) => x.id === id)
+        if (!s) return
+        setPetRef(s.pet_ref)
+        go('conversation')
+        ask(s.user_message, { pet: s.pet_ref, alert: s.alert_context, scenarioId: s.id, faults: extra })
+      },
+      say: (message, opts) => {
+        go('conversation')
+        ask(message, { pet: opts?.pet ?? petRef, faults: opts?.faults })
+      },
+      handoff: () => {
+        const from = entriesRef.current.findLast((e) => e.origin === 'chat' && e.run.response?.escalation.trigger)
+        if (!from) return false
+        go('conversation')
+        handoff(from)
+        return true
+      },
+      open: (view, tab, id) => go(view, tab, id),
+    }),
+    [scenarios, ask, handoff, petRef],
+  )
 
   if (loadError) {
     return (
@@ -134,43 +176,49 @@ export default function App() {
   const live = entries.some((e) => e.run.phase === 'running')
 
   return (
-    <Shell view={route.view} flowId={route.id} info={info} live={live}>
-      {route.view === 'chat' ? (
-        <ChatView
+    <Shell view={route.view} info={info} live={live} onDemo={() => setDemo(true)}>
+      {route.view === 'conversation' ? (
+        <ConversationView
           entries={chat}
+          topologies={topologies}
           pets={info?.pets ?? []}
           petRef={petRef}
           onPet={setPetRef}
           scenarios={scenarios}
-          onSend={(m) => ask(m, petRef)}
+          allFaults={allFaults}
+          faults={faults}
+          onFaults={setFaults}
+          onSend={(m) => ask(m, { pet: petRef, faults })}
           onScenario={(s) => {
             setPetRef(s.pet_ref)
-            ask(s.user_message, s.pet_ref, s.alert_context, s.id)
+            ask(s.user_message, { pet: s.pet_ref, alert: s.alert_context, scenarioId: s.id, faults })
           }}
           onHandoff={handoff}
-        />
-      ) : route.view === 'flow' ? (
-        <FlowView
-          entries={entries}
-          id={route.id}
-          topologies={topologies}
-          scenarios={scenarios}
-          onScenario={(s) => {
-            void runScenario(s)
-            go('flow')
-          }}
           onRerun={rerun}
         />
+      ) : route.view === 'knowledge' ? (
+        <KnowledgeView tab={route.tab} id={route.id} cited={cited} />
       ) : (
-        <TestView
-          scenarios={scenarios}
-          faults={faults}
-          entries={entries}
-          onRun={(s) => void runScenario(s)}
-          onRunAll={() => void runAll()}
-          onFree={runFree}
+        <QualityView
+          tab={route.tab}
+          info={info}
+          pets={info?.pets ?? []}
+          labels={labels}
+          evals={evals.state}
+          onStartEvals={evals.start}
+          scenarios={{
+            scenarios,
+            entries: entries.filter((e) => e.origin === 'test'),
+            topologies,
+            onRun: (s) => void runScenario(s),
+            onRunAll: () => void runAll(),
+            onRerun: rerun,
+          }}
         />
       )}
+      <Sheet open={demo} onClose={() => setDemo(false)} label="Démo guidée">
+        <DemoGuide actions={demoActions} onDone={() => setDemo(false)} />
+      </Sheet>
     </Shell>
   )
 }

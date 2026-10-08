@@ -113,11 +113,43 @@ async def test_postgres_hybrid_retrieval_end_to_end() -> None:
         thread_id="t",
         turn_id="1",
         pet_ref="pet_demo_rex",
-        user_message="Il a mangé du chocolat mais il a l'air bien",
+        # Pas « il a mangé du chocolat » : une urgence part en texte fixe, sans recherche.
+        user_message="Quels aliments sont toxiques pour un chien ?",
     )
     out = await build_graph().ainvoke(initial_state(req), context=deps.for_run())
     assert any(c.source_id.startswith("toxiques-courants") for c in out["response"].citations)
-    assert out["trace"][2].data["retriever"].startswith("Postgres")
+    step = next(t for t in out["trace"] if t.node == "retrieval")
+    assert step.data["retriever"].startswith("Postgres")
+
+
+@pytest.mark.skipif(not DB, reason="PAWRISE_TEST_DATABASE_URL non défini")
+async def test_postgres_follows_edits_made_from_the_console() -> None:
+    from pawrise_assistant.knowledge import KnowledgeBase
+    from pawrise_assistant.rag.pgstore import PgHybridRetriever
+
+    assert DB is not None
+    store = PgHybridRetriever(DB, HashEmbedder())
+    await store.init_schema()
+    kb = KnowledgeBase(load_corpus(SEED_CORPUS), store=store)
+    await kb.reset()
+
+    async def ids(query: str) -> list[str]:
+        return [c.chunk_id for c in await kb.search(query, 20)]
+
+    assert "sommeil-chien-adulte#1" in await ids("sommeil chien adulte")
+    await kb.update_chunk("sommeil-chien-adulte#1", enabled=False)
+    assert "sommeil-chien-adulte#1" not in await ids("sommeil chien adulte")
+
+    await kb.update_chunk(
+        "sommeil-chien-adulte#1", enabled=True, text="Les lévriers dorment seize heures."
+    )
+    assert (await ids("lévriers seize heures"))[0] == "sommeil-chien-adulte#1"
+
+    doc = await kb.add_document("Bain du chien", [("Fréquence", "Un bain par mois suffit.")])
+    assert (await ids("bain par mois"))[0] == f"{doc.doc_id}#1"
+
+    await kb.reset()
+    assert f"{doc.doc_id}#1" not in await ids("bain par mois")
 
 
 async def _mismatch(db: str) -> None:

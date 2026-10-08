@@ -12,6 +12,7 @@ import asyncio
 import functools
 import time
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from langgraph.runtime import Runtime
@@ -387,6 +388,7 @@ async def finalize(state: AssistantState, runtime: Runtime[Deps]) -> Update:
     )
     await deps.audit.write(
         {
+            "ts": datetime.now(UTC).isoformat(timespec="seconds"),
             "thread_id": state["thread_id"],
             "turn_id": state["turn_id"],
             "pet_ref": state["pet_ref"],

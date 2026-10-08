@@ -11,7 +11,6 @@ from pawrise_assistant.components.generation import Generator, TemplateGenerator
 from pawrise_assistant.components.guardrail import Guardrail, RuleGuardrail
 from pawrise_assistant.components.intent import IntentClassifier, RuleIntentClassifier
 from pawrise_assistant.components.retrieval import (
-    InMemoryHybridRetriever,
     OverlapRelevanceFilter,
     RelevanceFilter,
     Retriever,
@@ -19,6 +18,7 @@ from pawrise_assistant.components.retrieval import (
 )
 from pawrise_assistant.components.understanding import QueryUnderstanding, RuleQueryUnderstanding
 from pawrise_assistant.core_api.client import CoreApi, InMemoryCoreApi
+from pawrise_assistant.knowledge import KnowledgeBase
 from pawrise_assistant.llm.provider import LLMProvider
 
 SEED_CORPUS = Path(__file__).resolve().parents[3] / "corpus" / "seed"
@@ -67,7 +67,7 @@ def dev_deps(audit: AuditSink | None = None, corpus_dir: Path = SEED_CORPUS) -> 
         core_api=InMemoryCoreApi(),
         classifier=RuleIntentClassifier(),
         understanding=RuleQueryUnderstanding(),
-        retriever=InMemoryHybridRetriever(load_corpus(corpus_dir)),
+        retriever=KnowledgeBase(load_corpus(corpus_dir)),
         reranker=OverlapRelevanceFilter(),
         generator=TemplateGenerator(),
         guardrail=RuleGuardrail(),

@@ -65,7 +65,10 @@ export const ON_ERROR: Record<string, string> = {
 export type Tone = 'ok' | 'fixed' | 'careful' | 'urgent'
 
 /** Comment la réponse a été produite, en un mot. */
-export function verdict(r: AssistantResponse): { label: string; tone: Tone } {
+export function verdict(r: {
+  escalation: AssistantResponse['escalation']
+  metadata: { template_id: string | null }
+}): { label: string; tone: Tone } {
   const t = r.metadata.template_id
   if (r.escalation.urgency === 'high') return { label: 'Urgence', tone: 'urgent' }
   if (t === 'SR-FALLBACK-02') return { label: 'Réponse prudente', tone: 'careful' }

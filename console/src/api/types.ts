@@ -88,6 +88,10 @@ export interface Info {
   models: string[]
   retriever: string
   pets: Pet[]
+  embedder?: string | null
+  reranker?: string
+  knowledge_editable?: boolean
+  pets_editable?: boolean
 }
 
 export interface RunRequest {

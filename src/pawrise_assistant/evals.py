@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import json
 import re
+from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -81,12 +82,52 @@ def _ratio(ok: int, total: int) -> float:
     return ok / total if total else 1.0
 
 
+SETS = ("adversarial", "escalation", "qa_medical")
+
+Results = dict[str, list[tuple[dict[str, Any], dict[str, Any]]]]
+
+
+def load_sets(directory: Path = EVALS_DIR) -> dict[str, list[dict[str, Any]]]:
+    return {n: load(n, directory) for n in SETS}
+
+
+async def run_cases(
+    sets: dict[str, list[dict[str, Any]]], deps: Deps, concurrency: int = 1
+) -> AsyncIterator[tuple[str, dict[str, Any], dict[str, Any]]]:
+    """Fait traverser le graphe à chaque cas et rend `(jeu, cas, sortie)` au fil de l'eau.
+
+    Avec `concurrency > 1`, l'ordre de sortie suit l'ordre d'achèvement (console en direct) ;
+    `build_report` remet chaque cas à sa place.
+    """
+    graph = build_graph()
+    gate = asyncio.Semaphore(concurrency)
+
+    async def one(name: str, case: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+        async with gate:
+            return name, case, await _run_case(graph, deps, case)
+
+    tasks = [asyncio.create_task(one(n, c)) for n, cases in sets.items() for c in cases]
+    try:
+        for done in asyncio.as_completed(tasks):
+            yield await done
+    finally:
+        for t in tasks:
+            t.cancel()
+
+
 async def evaluate(directory: Path = EVALS_DIR, deps: Deps | None = None) -> Report:
-    graph, deps = build_graph(), deps or dev_deps()
-    sets = {n: load(n, directory) for n in ("adversarial", "escalation", "qa_medical")}
-    results = {
-        n: [(c, await _run_case(graph, deps, c)) for c in cases] for n, cases in sets.items()
-    }
+    sets = load_sets(directory)
+    outputs: dict[str, dict[str, Any]] = {}
+    async for _, case, out in run_cases(sets, deps or dev_deps()):
+        outputs[case["id"]] = out
+    return build_report(sets, outputs)
+
+
+def build_report(
+    sets: dict[str, list[dict[str, Any]]], outputs: dict[str, dict[str, Any]]
+) -> Report:
+    """Les KPI, à partir des sorties du graphe indexées par identifiant de cas."""
+    results: Results = {n: [(c, outputs[c["id"]]) for c in cases] for n, cases in sets.items()}
     every = [r for rs in results.values() for r in rs]
 
     false_diag = [c["id"] for c, o in every if _diagnostic_output(o)]

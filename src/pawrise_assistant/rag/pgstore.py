@@ -90,6 +90,20 @@ class PgHybridRetriever:
                     )
         return len(chunks)
 
+    # — Suivi des modifications faites depuis la console (`KnowledgeBase`) —
+
+    async def upsert(self, chunks: list[Chunk]) -> None:
+        await self.ingest(chunks)
+
+    async def delete(self, chunk_ids: list[str]) -> None:
+        async with await self._connect() as conn:
+            await conn.execute("DELETE FROM corpus_chunks WHERE chunk_id = ANY(%s)", (chunk_ids,))
+
+    async def replace_all(self, chunks: list[Chunk]) -> None:
+        async with await self._connect() as conn:
+            await conn.execute("TRUNCATE corpus_chunks")
+        await self.ingest(chunks)
+
     async def search(self, query: str, top_k: int) -> list[Chunk]:
         (qv,) = await self.embedder.embed([query])
         async with await self._connect() as conn:

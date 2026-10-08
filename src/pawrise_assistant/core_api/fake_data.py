@@ -101,7 +101,12 @@ def _mean(values: list[float]) -> float:
 
 
 def summarize(pet_ref: str, period_days: int) -> TelemetrySummary:
-    series = SERIES[pet_ref]
+    return summarize_series(SERIES[pet_ref], period_days, pet_ref)
+
+
+def summarize_series(
+    series: list[Day], period_days: int, pet_ref: str = "pet_demo"
+) -> TelemetrySummary:
     period_days = max(1, min(period_days, 7))
     recent, baseline = series[:period_days], series[7:]
     act = _mean([d.activity_min for d in recent]) / _mean([d.activity_min for d in baseline]) - 1
@@ -119,3 +124,103 @@ def summarize(pet_ref: str, period_days: int) -> TelemetrySummary:
 
 def alerts(pet_ref: str, period_days: int) -> list[Alert]:
     return [a for a in ALERTS[pet_ref] if a.days_ago < period_days]
+
+
+# — Modifications depuis la console (vue Connaissances › Chiens) —
+# Les séries et alertes ci-dessus sont la référence ; la console peut les modifier en session pour
+# montrer une escalade (R-ESC-03), puis tout remettre d'aplomb avec `reset`.
+
+_ORIGINAL_SERIES = {ref: list(days) for ref, days in SERIES.items()}
+_ORIGINAL_ALERTS = {ref: list(items) for ref, items in ALERTS.items()}
+RECENT_DAYS = 7
+
+
+@dataclass(frozen=True)
+class Controls:
+    activity_drop_pct: float
+    sleep_rise_pct: float
+    alert: bool
+
+
+def _measured(pet_ref: str) -> Controls:
+    """Les réglages qui décrivent les données d'origine."""
+    s = summarize_series(_ORIGINAL_SERIES[pet_ref], RECENT_DAYS)
+    return Controls(
+        activity_drop_pct=max(0.0, -s.activity_delta_pct),
+        sleep_rise_pct=max(0.0, s.sleep_delta_pct),
+        alert=any(a.kind == "activity_drop" for a in _ORIGINAL_ALERTS[pet_ref]),
+    )
+
+
+_CONTROLS: dict[str, Controls] = {ref: _measured(ref) for ref in PROFILES}
+
+
+def controls(pet_ref: str) -> Controls:
+    return _CONTROLS[pet_ref]
+
+
+def modified(pet_ref: str) -> bool:
+    return (
+        SERIES[pet_ref] != _ORIGINAL_SERIES[pet_ref] or ALERTS[pet_ref] != _ORIGINAL_ALERTS[pet_ref]
+    )
+
+
+def apply(
+    pet_ref: str,
+    *,
+    activity_drop_pct: float | None = None,
+    sleep_rise_pct: float | None = None,
+    alert: bool | None = None,
+) -> None:
+    """Réécrit les 7 derniers jours (activité, sommeil) et l'alerte d'activité d'un chien."""
+    current = _CONTROLS[pet_ref]
+    new = Controls(
+        activity_drop_pct=current.activity_drop_pct
+        if activity_drop_pct is None
+        else activity_drop_pct,
+        sleep_rise_pct=current.sleep_rise_pct if sleep_rise_pct is None else sleep_rise_pct,
+        alert=current.alert if alert is None else alert,
+    )
+    if activity_drop_pct is not None or sleep_rise_pct is not None:
+        original = _ORIGINAL_SERIES[pet_ref]
+        base_act = _mean([d.activity_min for d in original[RECENT_DAYS:]])
+        base_sleep = _mean([d.sleep_h for d in original[RECENT_DAYS:]])
+        SERIES[pet_ref] = [
+            Day(
+                activity_min=round(
+                    base_act * (1 - new.activity_drop_pct / 100) + ((i * 7 % 5) - 2) * 0.4, 1
+                ),
+                sleep_h=round(
+                    base_sleep * (1 + new.sleep_rise_pct / 100) + ((i * 3 % 5) - 2) / 20, 2
+                ),
+                resting_hr=d.resting_hr,
+                night_hr_peak=d.night_hr_peak,
+            )
+            if i < RECENT_DAYS
+            else d
+            for i, d in enumerate(original)
+        ]
+    others = [a for a in ALERTS[pet_ref] if a.kind != "activity_drop"]
+    if new.alert:
+        previous = next((a for a in ALERTS[pet_ref] if a.kind == "activity_drop"), None)
+        drop = round(new.activity_drop_pct)
+        ALERTS[pet_ref] = [
+            Alert(
+                alert_id=previous.alert_id if previous else f"A-DEMO-{pet_ref.rsplit('_', 1)[-1]}",
+                kind="activity_drop",
+                level="vigilance",
+                days_ago=0,
+                summary=f"activité -{drop} % par rapport à la baseline, depuis {RECENT_DAYS} jours",
+            ),
+            *others,
+        ]
+    else:
+        ALERTS[pet_ref] = others
+    _CONTROLS[pet_ref] = new
+
+
+def reset() -> None:
+    for ref in PROFILES:
+        SERIES[ref] = list(_ORIGINAL_SERIES[ref])
+        ALERTS[ref] = list(_ORIGINAL_ALERTS[ref])
+        _CONTROLS[ref] = _measured(ref)

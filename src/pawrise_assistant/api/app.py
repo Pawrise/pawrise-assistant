@@ -33,8 +33,10 @@ from pawrise_assistant.api.events import (
 )
 from pawrise_assistant.api.scenarios import SCENARIOS, Scenario
 from pawrise_assistant.api.settings import Settings
+from pawrise_assistant.api.workbench import workbench_router
 from pawrise_assistant.components.audit import JsonlAuditSink
 from pawrise_assistant.core_api import fake_data
+from pawrise_assistant.core_api.client import InMemoryCoreApi
 from pawrise_assistant.domain.models import AlertContext, AssistantResponse, Turn, TurnRequest
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.builder import build_graph
@@ -47,6 +49,7 @@ from pawrise_assistant.handoff.graph import (
     generate_handoff_summary,
 )
 from pawrise_assistant.handoff.models import HandoffRequest, HandoffSummary
+from pawrise_assistant.knowledge import KnowledgeBase
 from pawrise_assistant.wiring import build_deps
 
 
@@ -85,7 +88,7 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["*"],
     )
 
@@ -156,6 +159,9 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
 
         return EventSourceResponse(stream())
 
+    kb = deps.retriever if isinstance(deps.retriever, KnowledgeBase) else None
+    app.include_router(workbench_router(settings, deps))
+
     @app.get("/debug/info")
     async def info() -> dict[str, Any]:
         """Ce qui tourne, pour l'en-tête de la console, et les chiens de démonstration."""
@@ -164,6 +170,10 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
             "ai": ai,
             "models": [settings.llm_model_nano, settings.llm_model_main] if ai else [],
             "retriever": settings.retriever,
+            "embedder": kb.embedder if kb else None,
+            "reranker": deps.reranker.name,
+            "knowledge_editable": kb is not None,
+            "pets_editable": isinstance(deps.core_api, InMemoryCoreApi),
             "pets": [
                 {"pet_ref": p.pet_ref, "name": p.name, "breed": p.breed, "age_years": p.age_years}
                 for p in fake_data.PROFILES.values()
