@@ -120,21 +120,35 @@ export interface Slot {
   attempt: Attempt
   start: number
   end: number
+  /** 0, ou 1 pour la seconde de deux branches qui tournent en même temps. */
+  lane: number
 }
 
 /**
- * Les nœuds s'exécutent l'un après l'autre : on les place bout à bout. En pas à pas, chaque passage
- * dure au moins MIN_SLOT_MS à l'écran ; sinon, sa vraie durée (1 ms minimum pour rester visible).
+ * Les passages sont placés bout à bout, sauf deux branches lancées en même temps côté serveur :
+ * elles partagent le même départ, sur deux lignes. En pas à pas, chaque passage dure au moins
+ * MIN_SLOT_MS à l'écran ; sinon, sa vraie durée (1 ms minimum pour rester visible).
  */
 export function slots(run: RunState, stepByStep: boolean): Slot[] {
   let cursor = 0
-  return run.attempts.map((a) => {
+  const out: Slot[] = []
+  for (const a of run.attempts) {
     const real = a.durationMs ?? MIN_SLOT_MS
     const dur = stepByStep ? Math.max(real, MIN_SLOT_MS) : Math.max(real, 1)
-    const start = cursor
-    cursor += dur
-    return { attempt: a, start, end: cursor }
-  })
+    const prev = out.at(-1)
+    const parallel =
+      prev !== undefined &&
+      prev.lane === 0 &&
+      !a.reused &&
+      !prev.attempt.reused &&
+      prev.attempt.endTs !== null &&
+      a.startTs < prev.attempt.endTs
+    const start = parallel ? prev.start : cursor
+    const slot = { attempt: a, start, end: start + dur, lane: parallel ? 1 : 0 }
+    cursor = Math.max(cursor, slot.end)
+    out.push(slot)
+  }
+  return out
 }
 
 export function totalOf(s: Slot[]): number {
@@ -171,7 +185,33 @@ const TOOL_CALLERS = new Set(['query_understanding', 'collect'])
 
 export const edgeId = (source: string, target: string) => `${source}->${target}`
 
-export function snapshot(run: RunState, s: Slot[], cursor: number, nodeIds: string[]): Snapshot {
+/** Ce que la console sait du graphe pour déduire les arêtes empruntées. */
+export interface GraphShape {
+  /** Prédécesseurs de chaque nœud dans la topologie. */
+  preds: Record<string, string[]>
+  /** Nœuds de jonction : ils attendent tous leurs prédécesseurs. */
+  joins: Set<string>
+}
+
+export function shapeOf(edges: { source: string; target: string; kind: string }[]): GraphShape {
+  const preds: Record<string, string[]> = {}
+  const incoming: Record<string, number> = {}
+  for (const e of edges) {
+    if (e.kind === 'tool') continue
+    ;(preds[e.target] ??= []).push(e.source)
+    if (e.kind === 'normal') incoming[e.target] = (incoming[e.target] ?? 0) + 1
+  }
+  const joins = new Set(Object.keys(incoming).filter((n) => incoming[n] > 1 && n !== 'finalize'))
+  return { preds, joins }
+}
+
+export function snapshot(
+  run: RunState,
+  s: Slot[],
+  cursor: number,
+  nodeIds: string[],
+  shape?: GraphShape,
+): Snapshot {
   const total = totalOf(s)
   const ended = run.phase !== 'running' && run.phase !== 'idle' && cursor >= total
   const seen = s.filter((x) => x.start <= cursor)
@@ -214,9 +254,30 @@ export function snapshot(run: RunState, s: Slot[], cursor: number, nodeIds: stri
   let active: string | null = null
   if (seen.length) taken.add(edgeId('__start__', seen[0].attempt.node))
   for (let i = 1; i < seen.length; i++) {
-    const id = edgeId(seen[i - 1].attempt.node, seen[i].attempt.node)
-    taken.add(id)
-    if (cursor < seen[i].end) active = id
+    const target = seen[i].attempt.node
+    const running = cursor < seen[i].end
+    if (!shape) {
+      const id = edgeId(seen[i - 1].attempt.node, target)
+      taken.add(id)
+      if (running) active = id
+      continue
+    }
+    // On remonte le temps jusqu'au passage précédent de ce même nœud : une jonction prend
+    // toutes ses branches, un nœud ordinaire le prédécesseur le plus récent.
+    const preds = new Set(shape.preds[target] ?? [])
+    const sources: string[] = []
+    for (let j = i - 1; j >= 0; j--) {
+      const n = seen[j].attempt.node
+      if (n === target) break
+      if (preds.has(n) && !sources.includes(n)) {
+        sources.push(n)
+        if (!shape.joins.has(target)) break
+      }
+    }
+    for (const src of sources) {
+      taken.add(edgeId(src, target))
+      if (running) active = edgeId(src, target)
+    }
   }
   if (qu && tools.length) taken.add(edgeId(qu.attempt.node, 'core_api'))
   if (ended && (run.response || run.summary)) taken.add(edgeId('finalize', '__end__'))

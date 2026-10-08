@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { GraphCanvas } from '@/graph/GraphCanvas'
 import { layout, type Positions } from '@/graph/layout'
 import { cn } from '@/lib/utils'
-import { emptyRun, reduce, slots as toSlots, snapshot, totalOf } from '@/run/model'
+import { emptyRun, reduce, shapeOf, slots as toSlots, snapshot, totalOf } from '@/run/model'
 import { fmtMs } from '@/run/status'
 
 const FAULT_LABELS: Record<string, string> = {
@@ -97,7 +97,11 @@ export default function App() {
   const slots = useMemo(() => toSlots(run, stepByStep), [run, stepByStep])
   const total = totalOf(slots)
   const nodeIds = useMemo(() => topology?.nodes.map((n) => n.id) ?? [], [topology])
-  const snap = useMemo(() => snapshot(run, slots, cursor, nodeIds), [run, slots, cursor, nodeIds])
+  const shape = useMemo(() => (topology ? shapeOf(topology.edges) : undefined), [topology])
+  const snap = useMemo(
+    () => snapshot(run, slots, cursor, nodeIds, shape),
+    [run, slots, cursor, nodeIds, shape],
+  )
   const meta = useMemo(
     () =>
       Object.fromEntries((topology?.nodes ?? []).map((n) => [n.id, n])) as Record<string, TopologyNode>,

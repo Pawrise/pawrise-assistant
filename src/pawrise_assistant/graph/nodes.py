@@ -17,7 +17,7 @@ from typing import Any
 from langgraph.runtime import Runtime
 
 from pawrise_assistant.components.guardrail import GuardrailContext, escalation_rules
-from pawrise_assistant.components.pii import redact
+from pawrise_assistant.components.pii import redact as redact_pii
 from pawrise_assistant.components.safe_responses import FALLBACK, SAFE_RESPONSES, URGENT_PREFIX
 from pawrise_assistant.domain.models import (
     TELEMETRY_SOURCE,
@@ -46,6 +46,22 @@ def _trace(node: str, status: Any, summary: str, **data: Any) -> list[NodeTrace]
     return [NodeTrace(node=node, status=status, summary=summary, data=data)]
 
 
+# — 0 : masquer, avant tout appel LLM (ADR-006) —
+
+
+async def redact(state: AssistantState) -> Update:
+    message, pii = redact_pii(state["user_message"])
+    return {
+        "user_message": message,
+        "trace": _trace(
+            "redact",
+            "ok",
+            f"{sum(pii.values())} donnée(s) personnelle(s) masquée(s)" if pii else "Rien à masquer",
+            pii_redacted=pii,
+        ),
+    }
+
+
 # — 1 —
 
 
@@ -53,11 +69,9 @@ async def circuit_breaker(state: AssistantState, runtime: Runtime[Deps]) -> Upda
     deps = runtime.context
     if "classifier_down" in deps.faults:
         raise RuntimeError("classifieur injoignable (panne injectée)")
-    message, pii = redact(state["user_message"])
-    result = await deps.classifier.classify(message)
+    result = await deps.classifier.classify(state["user_message"])
     clean = result.intent == "clean"
     return {
-        "user_message": message,
         "intent": result.intent,
         "intent_confidence": result.confidence,
         "trace": _trace(
@@ -67,7 +81,6 @@ async def circuit_breaker(state: AssistantState, runtime: Runtime[Deps]) -> Upda
             intent=result.intent,
             confidence=result.confidence,
             matched=result.matched,
-            pii_redacted=pii,
         ),
     }
 
@@ -143,6 +156,21 @@ async def query_understanding(state: AssistantState, runtime: Runtime[Deps]) -> 
             pet_context=pet.describe(),
         ),
     }
+
+
+# — Jonction —
+
+
+async def gate(state: AssistantState) -> Update:
+    """Attend le tri et la reformulation, lancés en parallèle ; le routage est dans `route_gate`."""
+    intent = state.get("intent")
+    if state.get("classifier_failed") or intent is None:
+        summary = "Tri en panne : réponse de repli"
+    elif intent != "clean":
+        summary = f"Arrêt : {intent} (reformulation écartée)"
+    else:
+        summary = "Recherche utile" if state.get("needs_retrieval", True) else "Rien à chercher"
+    return {"trace": _trace("gate", "ok" if intent == "clean" else "redirected", summary)}
 
 
 # — 3 et 4 —

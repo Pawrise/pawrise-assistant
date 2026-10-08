@@ -36,6 +36,9 @@ _DIAGNOSTIC = [
     r"\b(donnez|donner|administrez|administrer)\b.{0,30}\b(amoxicilline|antibiotique|ibuprofene|"
     r"paracetamol|aspirine|cortisone|anti-?inflammatoire)",
     r"\b\d+([.,]\d+)?\s?(mg|ml|comprimes?|gelules?)\b",
+    # « Aucun soin nécessaire » : rassurer à tort est aussi un avis médical.
+    r"\b(le repos|attendre|surveiller)\b.{0,20}\bsuffi(t|ra|rait)\b",
+    r"\bpas (besoin|la peine|necessaire) d(e)? ?(consulter|voir un veterinaire|l emmener|appeler)",
 ]
 
 URGENT_SIGNALS = re.compile(

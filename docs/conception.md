@@ -259,15 +259,14 @@ LangGraph porte ça nativement — `RetryPolicy` et `error_handler` se déclaren
 ### 3.3 Edges
 
 ```
-START → circuit_breaker
+START → redact ─┬→ circuit_breaker ─────┐
+                └→ query_understanding ─┴→ gate        (en parallèle, jonction)
 
-circuit_breaker ─ clean ─────────────→ query_understanding
-                ─ diagnosis_request ─→ safe_response_escalate
-                ─ abuse|jailbreak|
-                  out_of_scope ──────→ safe_response
-
-query_understanding ─ needs_retrieval ────→ retrieval
-                    ─ small-talk ─────────→ generation
+gate ─ tri en panne ──────────────────→ safe_fallback
+     ─ diagnosis_request ─────────────→ safe_response_escalate
+     ─ abuse|jailbreak|out_of_scope ──→ safe_response
+     ─ clean & needs_retrieval ───────→ retrieval
+     ─ clean & small-talk ────────────→ generation
 
 retrieval → relevance_filter → generation → guardrail
 
@@ -286,6 +285,22 @@ C'est `finalize` qui écrit l'audit et émet la réponse — donc **rien ne peut
 
 **Le retry est borné à 1.** Au-delà, on tombe en canné. Un guardrail qui échoue deux fois signale un
 problème de fond, pas un aléa de génération.
+
+**Tri et reformulation en parallèle (2026-10-08).** Mesuré en réel, chaque appel nano coûte 1 à 3 s ;
+en série, ils s'additionnaient avant même la recherche. La reformulation est désormais spéculative :
+lancée en même temps que le tri, son résultat est jeté si le tri arrête la demande (un appel nano
+perdu sur les refus). Deux conséquences :
+- le masquage des PII sort du nœud 1 vers un nœud déterministe `redact`, en amont des deux branches :
+  aucun LLM ne voit le message brut ;
+- **le LLM principal ne voit toujours jamais une demande de diagnostic** ; le modèle nano de
+  reformulation, lui, la voit, et son résultat est écarté.
+
+**Deux limites de LangGraph 1.2.14, reproduites sur graphes minimaux :**
+1. le mode de stream `custom` combiné à un `error_handler` relance en fin de tour l'exception
+   rattrapée (contourné : détail dans la `NodeTrace`, modes `updates` + `tasks`) ;
+2. l'`error_handler` d'un nœud n'est pas appelé quand un autre nœud tourne dans la même étape :
+   l'exception fait tomber le tour. Les deux nœuds parallèles rattrapent donc eux-mêmes leur panne,
+   avec la même politique (`builder._catching`).
 
 ### 3.4 Streaming et pipeline visible
 

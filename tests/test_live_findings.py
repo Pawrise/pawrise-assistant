@@ -44,6 +44,34 @@ async def test_the_llm_alone_cannot_skip_the_search() -> None:
     assert not courtesy.needs_retrieval
 
 
+async def test_reasoning_effort_falls_back_minimal_then_low_then_nothing() -> None:
+    from types import SimpleNamespace
+    from typing import Any
+
+    from pawrise_assistant.llm.components import IntentOut
+    from pawrise_assistant.llm.provider import OpenAIProvider
+
+    sent: list[str | None] = []
+
+    class Responses:
+        async def parse(self, **kwargs: Any) -> Any:
+            effort = kwargs.get("reasoning", {}).get("effort")
+            sent.append(effort)
+            if effort is not None:
+                raise RuntimeError(f"Unsupported value for reasoning.effort: {effort}")
+            ok = IntentOut(intent="clean", confidence=1, reason="r")
+            return SimpleNamespace(output_parsed=ok, usage=None)
+
+    p = OpenAIProvider(
+        SimpleNamespace(responses=Responses()),
+        {"nano": "m", "main": "m"},
+        {"nano": "minimal", "main": "low"},
+    )
+    await p.parse(tier="nano", system="s", user="u", schema=IntentOut)
+    assert sent == ["minimal", "low", None]
+    assert p.reasoning_effort == {"nano": None, "main": "low"}
+
+
 async def test_small_talk_reply_is_cleaned_of_emoji() -> None:
     p = ScriptedProvider({"SmallTalkOut": [SmallTalkOut(text="Avec plaisir ! 😊")]})
     d = await LLMGenerator(p).generate(

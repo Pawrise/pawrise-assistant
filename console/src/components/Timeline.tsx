@@ -35,6 +35,8 @@ export function Timeline({
   onToggleMode: () => void
 }) {
   const pct = (t: number) => (total ? (t / total) * 100 : 0)
+  const lanesOf = new Set(slots.filter((s) => s.lane === 1).map((s) => s.start))
+  const hasLanes = lanesOf.size > 0
   const realTotal = slots.reduce((a, s) => a + (s.attempt.durationMs ?? 0), 0)
 
   return (
@@ -63,6 +65,7 @@ export function Timeline({
         </button>
       </div>
       <div className="relative h-8 rounded-md bg-zinc-100">
+        {/* Deux branches parallèles : chacune sur sa demi-hauteur. */}
         {slots.map((s) => {
           const running = cursor >= s.start && cursor < s.end
           const seen = cursor >= s.start
@@ -74,7 +77,10 @@ export function Timeline({
               onClick={() => onSelect(s.attempt.node, s.end)}
               title={`${label} · passage ${s.attempt.attempt} · ${fmtMs(s.attempt.durationMs ?? 0)}`}
               className={cn(
-                'absolute top-0 h-8 truncate border-r border-white px-1.5 text-left text-[11px] leading-8 first:rounded-l-md last:rounded-r-md',
+                'absolute truncate border-r border-white px-1.5 text-left text-[11px] first:rounded-l-md last:rounded-r-md',
+                hasLanes ? 'h-4 leading-4' : 'top-0 h-8 leading-8',
+                hasLanes && (s.lane === 1 ? 'top-4' : 'top-0'),
+                hasLanes && !lanesOf.has(s.start) && 'h-8 leading-8',
                 running
                   ? 'bg-violet-300 text-violet-950'
                   : seen

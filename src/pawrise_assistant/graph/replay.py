@@ -36,6 +36,10 @@ OVERRIDABLE: dict[str, dict[str, TypeAdapter[Any]]] = {
 }
 
 
+# Nœuds dont la sortie forcée s'applique à la jonction qui les suit (branches parallèles).
+FORCE_AT = {"circuit_breaker": "gate", "query_understanding": "gate"}
+
+
 class ReplayError(LookupError):
     pass
 
@@ -96,12 +100,23 @@ async def fork_config(
     overrides: dict[str, Any] | None,
 ) -> RunnableConfig:
     """La configuration à partir de laquelle relancer le graphe (`astream(None, config)`)."""
-    before = [s for s in await lineage(graph, head) if s.next == (node,)]
+    chain = await lineage(graph, head)
+    before = [s for s in chain if node in s.next]
     if len(before) < attempt:
         raise ReplayError(f"le nœud {node} n'a pas eu de passage n°{attempt} dans ce tour")
     config: RunnableConfig = before[attempt - 1].config
     if not overrides:
         return config
+    # Le tri et la reformulation tournent en parallèle : forcer la sortie de l'un avant la
+    # jonction laisserait celle-ci attendre l'autre. On applique donc la valeur à la jonction,
+    # une fois les deux branches finies, et l'aiguillage repart de là.
+    apply_at = FORCE_AT.get(node, node)
+    if apply_at != node:
+        # Le checkpoint juste APRÈS la jonction : sinon elle tournerait une seconde fois.
+        idx = next((i for i, s in enumerate(chain) if s.next == (apply_at,)), None)
+        if idx is None or idx + 1 >= len(chain):
+            raise ReplayError(f"le tour n'est pas allé jusqu'à {apply_at}")
+        config = chain[idx + 1].config
     allowed = OVERRIDABLE.get(node)
     if not allowed or not set(overrides) <= set(allowed):
         raise ReplayError(f"valeurs forçables pour {node} : {sorted(allowed or [])}")
@@ -117,5 +132,5 @@ async def fork_config(
             data={"forced": values.copy()},
         )
     ]
-    updated: RunnableConfig = await graph.aupdate_state(config, values, as_node=node)
+    updated: RunnableConfig = await graph.aupdate_state(config, values, as_node=apply_at)
     return updated

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from pawrise_assistant.graph.builder import ON_ERROR
 
-NodeKind = Literal["terminal", "step", "exit", "output", "tool"]
+NodeKind = Literal["terminal", "step", "exit", "output", "tool", "router"]
 
 
 class NodeMeta(BaseModel):
@@ -39,6 +39,13 @@ class Topology(BaseModel):
 
 NODE_META: dict[str, tuple[str, NodeKind, str, int | None]] = {
     "__start__": ("Début", "terminal", "Un tour arrive de dialog.", None),
+    "redact": ("Masquer", "step", "Retire e-mails, téléphones, IBAN… avant tout appel LLM.", None),
+    "gate": (
+        "Aiguiller",
+        "router",
+        "Attend le tri et la reformulation, lancés en parallèle, puis choisit la suite.",
+        None,
+    ),
     "circuit_breaker": (
         "Comprendre la demande",
         "step",
@@ -89,11 +96,13 @@ NODE_META: dict[str, tuple[str, NodeKind, str, int | None]] = {
 }
 
 EDGE_LABELS: dict[tuple[str, str], str] = {
-    ("circuit_breaker", "query_understanding"): "à traiter",
-    ("circuit_breaker", "safe_response"): "abus · détournement · hors sujet",
-    ("circuit_breaker", "safe_response_escalate"): "diagnostic",
-    ("query_understanding", "retrieval"): "recherche utile",
-    ("query_understanding", "generation"): "rien à chercher",
+    ("redact", "circuit_breaker"): "en parallèle",
+    ("redact", "query_understanding"): "en parallèle",
+    ("gate", "safe_response"): "abus · détournement · hors sujet",
+    ("gate", "safe_response_escalate"): "diagnostic",
+    ("gate", "safe_fallback"): "tri en panne",
+    ("gate", "retrieval"): "recherche utile",
+    ("gate", "generation"): "rien à chercher",
     ("guardrail", "finalize"): "validé",
     ("guardrail", "generation"): "rejeté → 2ᵉ essai",
     ("guardrail", "safe_fallback"): "rejeté 2 fois",

@@ -86,19 +86,24 @@ class OpenAIProvider:
     """Fonctionne avec OpenAI et avec l'API v1 d'Azure OpenAI (même SDK, autre `base_url`)."""
 
     def __init__(
-        self, client: Any, models: dict[Tier, str], reasoning_effort: str | None = None
+        self,
+        client: Any,
+        models: dict[Tier, str],
+        reasoning_effort: dict[Tier, str | None] | str | None = None,
     ) -> None:
         self.client, self.models = client, models
-        self.reasoning_effort = reasoning_effort
-        """Effort de raisonnement des modèles qui en ont un : bas = plus rapide. Désactivé tout
-        seul si le modèle ne le prend pas en charge."""
+        if not isinstance(reasoning_effort, dict):
+            reasoning_effort = {"nano": reasoning_effort, "main": reasoning_effort}
+        self.reasoning_effort: dict[Tier, str | None] = reasoning_effort
+        """Effort de raisonnement par niveau : les petits modèles classent, ils n'ont pas à
+        réfléchir. Si un modèle refuse la valeur, on retombe sur « low », puis sur rien."""
 
     @classmethod
     def from_env(
         cls,
         models: dict[Tier, str],
         base_url: str | None = None,
-        reasoning_effort: str | None = None,
+        reasoning_effort: dict[Tier, str | None] | str | None = None,
     ) -> OpenAIProvider:
         from openai import AsyncOpenAI
 
@@ -106,11 +111,12 @@ class OpenAIProvider:
         return cls(client, models, reasoning_effort)
 
     async def _call(
-        self, model: str, system: str, user: str, schema: type[T], max_tokens: int
+        self, tier: Tier, system: str, user: str, schema: type[T], max_tokens: int
     ) -> Any:
+        model, effort = self.models[tier], self.reasoning_effort.get(tier)
         extra: dict[str, Any] = {}
-        if self.reasoning_effort:
-            extra["reasoning"] = {"effort": self.reasoning_effort}
+        if effort:
+            extra["reasoning"] = {"effort": effort}
         try:
             return await self.client.responses.parse(
                 model=model,
@@ -123,8 +129,9 @@ class OpenAIProvider:
             )
         except Exception as e:
             if extra and "reasoning" in str(e).lower():
-                self.reasoning_effort = None  # modèle sans raisonnement : on n'insiste pas
-                return await self._call(model, system, user, schema, max_tokens)
+                # Valeur refusée : « low » d'abord, puis plus rien (modèle sans raisonnement).
+                self.reasoning_effort[tier] = "low" if effort not in ("low", None) else None
+                return await self._call(tier, system, user, schema, max_tokens)
             raise
 
     async def parse(
@@ -137,7 +144,7 @@ class OpenAIProvider:
             try:
                 # Les modèles à raisonnement comptent leurs tokens de réflexion dans la sortie :
                 # on garde une marge, sinon la réponse structurée peut être tronquée.
-                result = await self._call(model, system, user, schema, max_tokens + 1000)
+                result = await self._call(tier, system, user, schema, max_tokens + 1000)
             except Exception as e:  # réseau, quota, refus : le nœud décide (fail-open ou fermé)
                 span.set_attribute("error.type", type(e).__name__)
                 raise LLMUnavailable(f"{model} : {e}") from e

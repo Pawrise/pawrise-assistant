@@ -36,6 +36,7 @@ class AssistantState(TypedDict):
 
     # — Nœud 1 —
     intent: NotRequired[Intent]
+    classifier_failed: NotRequired[bool]
     intent_confidence: NotRequired[float]
 
     # — Nœud 2 —

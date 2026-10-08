@@ -120,8 +120,10 @@ def test_fork_reruns_from_a_node_with_other_faults(client: TestClient) -> None:
     started = fork[0]
     assert started["fork_of"] == run_id
     assert [s["node"] for s in started["reused"]] == [
+        "redact",
         "circuit_breaker",
         "query_understanding",
+        "gate",
         "retrieval",
         "relevance_filter",
     ]

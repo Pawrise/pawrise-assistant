@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -107,46 +108,79 @@ async def run_turn(
     }
 
 
+def _p(values: list[float], q: float) -> float:
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(q * len(ordered)))] if ordered else 0.0
+
+
+async def run_model(settings: Settings, cases: list[Any]) -> dict[str, Any]:
+    deps, graph = build_deps(settings, MemoryAuditSink()), build_graph()
+    detail: list[str] = []
+    latencies: list[float] = []
+    cost = 0.0
+    for name, pet, msg, faults, alert in cases:
+        try:
+            r = await run_turn(graph, deps, pet, msg, faults, alert)
+        except Exception as e:
+            detail.append(f"\n[{name}] ERREUR {type(e).__name__}: {str(e)[:200]}")
+            continue
+        cost += r["cost_eur"]
+        latencies.append(r["seconds"])
+        detail.append(f"\n[{name}] « {msg} »" + (f"  pannes={faults}" if faults else ""))
+        detail.extend(f"  {k}: {v}" for k, v in r.items())
+    report = await evaluate(deps=deps)
+    return {"detail": detail, "latencies": latencies, "cost": cost, "report": report}
+
+
 async def main() -> tuple[str, bool]:
-    settings = Settings(llm="openai")
+    base = Settings(llm="openai")
+    candidates = [
+        m.strip()
+        for m in os.environ.get("LIVE_MAIN_MODELS", f"{base.llm_model_main},gpt-5.4-mini").split(
+            ","
+        )
+        if m.strip()
+    ]
     lines = [
-        f"Validation réelle — modèles {settings.llm_model_nano} / {settings.llm_model_main}",
+        f"Validation réelle — tri/reformulation/vérification : {base.llm_model_nano}",
+        f"Modèles de rédaction comparés : {', '.join(candidates)}",
         "",
     ]
-    if not await check_models(settings, lines):
-        lines.append("\nArrêt : modèle indisponible. Régler PAWRISE_LLM_MODEL_NANO / _MAIN.")
+    available = []
+    for model in candidates:
+        probe = base.model_copy(update={"llm_model_main": model})
+        if await check_models(probe, lines):
+            available.append(model)
+    if not available:
+        lines.append("\nArrêt : aucun modèle de rédaction disponible.")
         return "\n".join(lines), False
 
-    deps, graph = build_deps(settings, MemoryAuditSink()), build_graph()
-    lines.append("\n== Scénarios de la console ==")
     cases = [
         (f"{s.id} · {s.label}", s.pet_ref, s.user_message, s.faults, s.alert_context)
         for s in SCENARIOS
     ]
     cases += [(name, pet, msg, [], None) for name, pet, msg in EXTRA]
-    total_cost, latencies = 0.0, []
-    for name, pet, msg, faults, alert in cases:
-        try:
-            r = await run_turn(graph, deps, pet, msg, faults, alert)
-        except Exception as e:
-            lines.append(f"\n[{name}] ERREUR {type(e).__name__}: {str(e)[:200]}")
-            continue
-        total_cost += r["cost_eur"]
-        latencies.append(r["seconds"])
-        lines.append(f"\n[{name}] « {msg} »" + (f"  pannes={faults}" if faults else ""))
-        lines.extend(f"  {k}: {v}" for k, v in r.items())
 
-    if latencies:
-        latencies.sort()
-        p95 = latencies[min(len(latencies) - 1, int(0.95 * len(latencies)))]
+    results = {}
+    for model in available:
+        settings = base.model_copy(update={"llm_model_main": model})
+        results[model] = await run_model(settings, cases)
+
+    lines.append("\n== Synthèse ==")
+    lines.append(f"{'rédaction':<18}{'médiane':>9}{'p95':>8}{'max':>8}{'coût 12 tours':>15}  évals")
+    for model, r in results.items():
+        lat, rep = r["latencies"], r["report"]
+        failing = [k.name for k in rep.kpis if not k.passed]
         lines.append(
-            f"\nCoût total {total_cost:.3f} € · latence max {latencies[-1]} s · p95 ≈ {p95} s"
+            f"{model:<18}{_p(lat, 0.5):>8.1f}s{_p(lat, 0.95):>7.1f}s{max(lat or [0]):>7.1f}s"
+            f"{r['cost']:>13.3f} €  {'OK' if rep.passed else 'BLOQUÉ : ' + ', '.join(failing)}"
         )
-
-    lines.append("\n== Évaluations (48 cas) avec le vrai LLM ==")
-    report = await evaluate(deps=deps)
-    lines.append(_format(report))
-    return "\n".join(lines), report.passed
+    for model, r in results.items():
+        lines.append(f"\n\n========== Rédaction : {model} ==========")
+        lines.extend(r["detail"])
+        lines.append("\n== Évaluations (48 cas) ==")
+        lines.append(_format(r["report"]))
+    return "\n".join(lines), all(r["report"].passed for r in results.values())
 
 
 if __name__ == "__main__":

@@ -51,7 +51,10 @@ def build_deps(settings: Settings, audit: AuditSink) -> Deps:
         provider = OpenAIProvider.from_env(
             {"nano": settings.llm_model_nano, "main": settings.llm_model_main},
             base_url=settings.llm_base_url,
-            reasoning_effort=settings.llm_reasoning_effort,
+            reasoning_effort={
+                "nano": settings.llm_reasoning_effort_nano,
+                "main": settings.llm_reasoning_effort_main,
+            },
         )
         deps = llm_deps(provider, audit=audit, corpus_dir=settings.corpus_dir)
     else:

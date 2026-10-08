@@ -38,6 +38,24 @@ function StepNode({ data }: NodeProps<Node<StepData>>) {
   const { meta, snap, selected } = data
   const v = VIEW[snap.view]
   const size = SIZE[meta.kind]
+  if (meta.kind === 'router') {
+    const lit = snap.view !== 'pending' && snap.view !== 'skipped'
+    return (
+      <div
+        style={{ width: size.w, height: size.h }}
+        title={meta.role}
+        className={cn(
+          'flex cursor-pointer items-center justify-center gap-1.5 rounded-full border text-[12px] font-medium transition-colors',
+          snap.view === 'running' ? 'border-violet-500 bg-violet-50 animate-pulse'
+            : lit ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-dashed border-zinc-300 bg-white text-zinc-500',
+          selected && 'outline-2 outline-offset-2 outline-zinc-900',
+        )}
+      >
+        <Handles />
+        <span aria-hidden>◇</span> {meta.label}
+      </div>
+    )
+  }
   if (meta.kind === 'terminal') {
     const lit = snap.view === 'ok'
     return (

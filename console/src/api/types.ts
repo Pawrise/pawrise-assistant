@@ -2,7 +2,7 @@
 // Toute évolution côté Python doit se refléter ici : le test `contract.test.ts` vérifie les
 // exemples d'événements réels enregistrés depuis l'API.
 
-export type NodeKind = 'terminal' | 'step' | 'exit' | 'output' | 'tool'
+export type NodeKind = 'terminal' | 'step' | 'exit' | 'output' | 'tool' | 'router'
 export type EdgeKind = 'normal' | 'conditional' | 'error' | 'tool'
 
 export interface TopologyNode {
