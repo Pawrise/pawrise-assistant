@@ -156,3 +156,20 @@
 @media (prefers-reduced-motion: reduce) {
   .flow-dash { animation: none; }
 }
+
+/* Tailwind v4 ne met plus la main sur les boutons : tout ce qui se clique l'affiche. */
+@layer base {
+  button:not(:disabled),
+  [role='button'],
+  a[href],
+  summary,
+  label:has(input),
+  input[type='range'],
+  input[type='checkbox'],
+  select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
