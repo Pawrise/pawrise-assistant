@@ -2,7 +2,7 @@
 // Tout est pur : la console calcule l'état du graphe à n'importe quel instant de la chronologie,
 // ce qui permet de rejouer le tour en déplaçant le curseur.
 
-import type { AssistantResponse, DebugEvent, NodeStatus, RunRequest } from '@/api/types'
+import type { AssistantResponse, DebugEvent, NodeStatus } from '@/api/types'
 
 export interface Attempt {
   node: string
@@ -14,11 +14,14 @@ export interface Attempt {
   summary: string
   data: Record<string, unknown>
   recoveredTo: string | null
+  /** Passage repris tel quel du tour d'origine (fork), pas réexécuté. */
+  reused: boolean
 }
 
 export interface RunState {
   phase: 'idle' | 'running' | 'done' | 'error'
-  input: RunRequest | null
+  runId: string | null
+  forkOf: { runId: string; node: string; attempt: number } | null
   attempts: Attempt[]
   response: AssistantResponse | null
   error: string | null
@@ -26,7 +29,8 @@ export interface RunState {
 
 export const emptyRun: RunState = {
   phase: 'idle',
-  input: null,
+  runId: null,
+  forkOf: null,
   attempts: [],
   response: null,
   error: null,
@@ -35,7 +39,27 @@ export const emptyRun: RunState = {
 export function reduce(state: RunState, e: DebugEvent): RunState {
   switch (e.type) {
     case 'run_started':
-      return { ...emptyRun, phase: 'running', input: e.input }
+      return {
+        ...emptyRun,
+        phase: 'running',
+        runId: e.run_id,
+        forkOf:
+          e.fork_of && e.from_node
+            ? { runId: e.fork_of, node: e.from_node, attempt: e.from_attempt ?? 1 }
+            : null,
+        attempts: (e.reused ?? []).map((r) => ({
+          node: r.node,
+          attempt: r.attempt,
+          startTs: 0,
+          endTs: 0,
+          durationMs: 0,
+          status: r.status,
+          summary: r.summary,
+          data: r.data,
+          recoveredTo: null,
+          reused: true,
+        })),
+      }
     case 'node_started':
       return {
         ...state,
@@ -51,6 +75,7 @@ export function reduce(state: RunState, e: DebugEvent): RunState {
             summary: '',
             data: {},
             recoveredTo: null,
+            reused: false,
           },
         ],
       }
@@ -87,14 +112,18 @@ export interface Slot {
   end: number
 }
 
+/**
+ * Les nœuds s'exécutent l'un après l'autre : on les place bout à bout. En pas à pas, chaque passage
+ * dure au moins MIN_SLOT_MS à l'écran ; sinon, sa vraie durée (1 ms minimum pour rester visible).
+ */
 export function slots(run: RunState, stepByStep: boolean): Slot[] {
   let cursor = 0
   return run.attempts.map((a) => {
     const real = a.durationMs ?? MIN_SLOT_MS
-    const start = stepByStep ? cursor : a.startTs
     const dur = stepByStep ? Math.max(real, MIN_SLOT_MS) : Math.max(real, 1)
-    cursor = start + dur
-    return { attempt: a, start, end: start + dur }
+    const start = cursor
+    cursor += dur
+    return { attempt: a, start, end: cursor }
   })
 }
 

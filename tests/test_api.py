@@ -98,6 +98,74 @@ def test_debug_run_reports_recovered_errors(client: TestClient) -> None:
     assert events[-1]["response"]["metadata"]["template_id"] == "SR-FALLBACK-02"
 
 
+def _run(client: TestClient, path: str, body: dict[str, Any]) -> list[dict[str, Any]]:
+    with client.stream("POST", path, json=body) as r:
+        assert r.status_code == 200, r.read()
+        return _events(r.read().decode())
+
+
+def test_fork_reruns_from_a_node_with_other_faults(client: TestClient) -> None:
+    original = _run(
+        client,
+        "/debug/runs",
+        {
+            "user_message": "Il boite de la patte arrière depuis hier, c'est grave ?",
+            "faults": ["draft_diagnostic", "draft_ungrounded"],
+        },
+    )
+    run_id = original[0]["run_id"]
+    assert original[-1]["response"]["metadata"]["template_id"] == "SR-FALLBACK-02"
+
+    fork = _run(client, f"/debug/runs/{run_id}/fork", {"node": "generation", "faults": []})
+    started = fork[0]
+    assert started["fork_of"] == run_id
+    assert [s["node"] for s in started["reused"]] == [
+        "circuit_breaker",
+        "query_understanding",
+        "retrieval",
+        "relevance_filter",
+    ]
+    rerun = [e["node"] for e in fork if e["type"] == "node_finished"]
+    assert rerun == ["generation", "guardrail", "finalize"]
+    assert fork[-1]["response"]["metadata"]["template_id"] is None
+
+    # On peut forker le fork : repartir du 2ᵉ passage n'a pas de sens ici, il n'y en a qu'un.
+    second = client.post(
+        f"/debug/runs/{started['run_id']}/fork", json={"node": "guardrail", "attempt": 2}
+    )
+    assert second.status_code == 422
+
+
+def test_fork_can_force_a_node_output(client: TestClient) -> None:
+    original = _run(client, "/debug/runs", {"user_message": "Rex dort beaucoup"})
+    fork = _run(
+        client,
+        f"/debug/runs/{original[0]['run_id']}/fork",
+        {"node": "circuit_breaker", "overrides": {"intent": "diagnosis_request"}},
+    )
+    assert fork[0]["reused"][-1]["summary"] == "Sortie forcée depuis la console"
+    assert fork[-1]["response"]["metadata"]["template_id"] == "SR-DIAG-01"
+    assert [e["node"] for e in fork if e["type"] == "node_finished"] == [
+        "safe_response_escalate",
+        "finalize",
+    ]
+
+
+def test_fork_validates_its_input(client: TestClient) -> None:
+    original = _run(client, "/debug/runs", {"user_message": "Rex dort beaucoup"})
+    rid = original[0]["run_id"]
+    assert client.post("/debug/runs/inconnu/fork", json={"node": "generation"}).status_code == 404
+    bad = client.post(
+        f"/debug/runs/{rid}/fork", json={"node": "generation", "overrides": {"draft": "x"}}
+    )
+    assert bad.status_code == 422
+    wrong = client.post(
+        f"/debug/runs/{rid}/fork",
+        json={"node": "circuit_breaker", "overrides": {"intent": "nimporte"}},
+    )
+    assert wrong.status_code == 422
+
+
 def test_debug_rejects_unknown_fault(client: TestClient) -> None:
     r = client.post("/debug/runs", json={"user_message": "x", "faults": ["meteor"]})
     assert r.status_code == 422

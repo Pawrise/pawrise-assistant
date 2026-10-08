@@ -76,8 +76,32 @@ export interface RunRequest {
   faults: string[]
 }
 
+export interface ReusedStep {
+  node: string
+  attempt: number
+  status: NodeStatus
+  summary: string
+  data: Record<string, unknown>
+}
+
+export interface ForkRequest {
+  node: string
+  attempt: number
+  overrides: Record<string, unknown> | null
+  faults: string[]
+}
+
 export type DebugEvent =
-  | { type: 'run_started'; run_id: string; ts_ms: number; input: RunRequest }
+  | {
+      type: 'run_started'
+      run_id: string
+      ts_ms: number
+      input: Partial<RunRequest> & { overrides?: Record<string, unknown> | null }
+      fork_of: string | null
+      from_node: string | null
+      from_attempt: number | null
+      reused: ReusedStep[]
+    }
   | { type: 'node_started'; node: string; attempt: number; ts_ms: number }
   | {
       type: 'node_finished'

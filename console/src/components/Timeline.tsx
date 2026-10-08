@@ -80,6 +80,7 @@ export function Timeline({
                   : seen
                     ? (BAR[s.attempt.status ?? 'ok'] ?? 'bg-zinc-200')
                     : 'text-zinc-400',
+                s.attempt.reused && 'opacity-50',
               )}
               style={{ left: `${pct(s.start)}%`, width: `${pct(s.end - s.start)}%` }}
             >

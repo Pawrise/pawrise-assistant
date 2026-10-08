@@ -1,4 +1,4 @@
-import type { DebugEvent, RunRequest, Scenario, Topology } from './types'
+import type { DebugEvent, ForkRequest, RunRequest, Scenario, Topology } from './types'
 
 async function getJson<T>(path: string): Promise<T> {
   const r = await fetch(path)
@@ -27,18 +27,36 @@ export function parseSseChunk(buffer: string): { events: string[]; rest: string 
 }
 
 /** Lance un tour en mode debug et appelle `onEvent` pour chaque événement reçu. */
-export async function runDebug(
-  req: RunRequest,
+export function runDebug(req: RunRequest, onEvent: (e: DebugEvent) => void, signal?: AbortSignal) {
+  return stream('/debug/runs', req, onEvent, signal)
+}
+
+/** Rejoue un tour depuis un nœud : réexécuté, ou avec une sortie forcée. */
+export function forkRun(
+  runId: string,
+  req: ForkRequest,
+  onEvent: (e: DebugEvent) => void,
+  signal?: AbortSignal,
+) {
+  return stream(`/debug/runs/${runId}/fork`, req, onEvent, signal)
+}
+
+async function stream(
+  path: string,
+  body: unknown,
   onEvent: (e: DebugEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const r = await fetch('/debug/runs', {
+  const r = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-    body: JSON.stringify(req),
+    body: JSON.stringify(body),
     signal,
   })
-  if (!r.ok || !r.body) throw new Error(`/debug/runs : HTTP ${r.status}`)
+  if (!r.ok || !r.body) {
+    const detail = await r.text().catch(() => '')
+    throw new Error(`${path} : HTTP ${r.status} ${detail}`)
+  }
   const reader = r.body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ''
   for (;;) {

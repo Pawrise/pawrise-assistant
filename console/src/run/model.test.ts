@@ -20,7 +20,7 @@ const start = (node: string, attempt: number, ts: number): DebugEvent => ({
 
 // Le parcours F : rejet, 2ᵉ essai, rejet, repli.
 const F: DebugEvent[] = [
-  { type: 'run_started', run_id: 'r', ts_ms: 0, input: { user_message: 'x', pet_ref: 'p', alert_context: null, faults: [] } },
+  { type: 'run_started', run_id: 'r', ts_ms: 0, input: {}, fork_of: null, from_node: null, from_attempt: null, reused: [] },
   start('circuit_breaker', 1, 0), done('circuit_breaker', 1, 2),
   start('query_understanding', 1, 2), done('query_understanding', 1, 4, 'ok', { tools: [{ ok: true }] }),
   start('retrieval', 1, 4), done('retrieval', 1, 6),
@@ -63,7 +63,28 @@ describe('modèle de tour', () => {
   })
 
   it('suit les vraies durées hors du mode pas à pas', () => {
-    expect(totalOf(slots(run, false))).toBe(19)
+    expect(totalOf(slots(run, false))).toBe(20)
+  })
+})
+
+describe('fork', () => {
+  it('reprend les passages du tour d’origine avant de recevoir les nouveaux', () => {
+    const started: DebugEvent = {
+      type: 'run_started', run_id: 'f', ts_ms: 0, input: {}, fork_of: 'r', from_node: 'generation',
+      from_attempt: 1,
+      reused: [
+        { node: 'circuit_breaker', attempt: 1, status: 'ok', summary: '', data: {} },
+        { node: 'query_understanding', attempt: 1, status: 'ok', summary: '', data: {} },
+      ],
+    }
+    const run = [started, start('generation', 1, 0), done('generation', 1, 2)].reduce(reduce, emptyRun)
+    expect(run.forkOf).toEqual({ runId: 'r', node: 'generation', attempt: 1 })
+    expect(run.attempts.map((a) => [a.node, a.reused])).toEqual([
+      ['circuit_breaker', true], ['query_understanding', true], ['generation', false],
+    ])
+    const s = slots(run, true)
+    const snap = snapshot(run, s, totalOf(s), NODES)
+    expect(snap.taken.has('query_understanding->generation')).toBe(true)
   })
 })
 

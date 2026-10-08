@@ -22,11 +22,41 @@ from pawrise_assistant.domain.models import AssistantResponse, NodeTrace
 ERROR_HANDLER_PREFIX = "__error_handler__"
 
 
+class ReusedStep(BaseModel):
+    node: str
+    attempt: int
+    status: str
+    summary: str
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
 class RunStarted(BaseModel):
     type: Literal["run_started"] = "run_started"
     run_id: str
     ts_ms: int = 0
     input: dict[str, Any]
+    fork_of: str | None = None
+    from_node: str | None = None
+    from_attempt: int | None = None
+    reused: list[ReusedStep] = Field(default_factory=list)
+    """Pour un fork : les passages repris tels quels du tour d'origine, avant le point de reprise."""
+
+
+def new_run_id() -> str:
+    return uuid.uuid4().hex[:12]
+
+
+def reused_steps(trace: list[NodeTrace]) -> list[ReusedStep]:
+    counts: Counter[str] = Counter()
+    steps = []
+    for t in trace:
+        counts[t.node] += 1
+        steps.append(
+            ReusedStep(
+                node=t.node, attempt=counts[t.node], status=t.status, summary=t.summary, data=t.data
+            )
+        )
+    return steps
 
 
 class NodeStarted(BaseModel):
@@ -69,10 +99,11 @@ DebugEvent = Annotated[
 class EventMapper:
     """Traduit les `StreamPart` v2 de LangGraph en événements de console."""
 
-    def __init__(self) -> None:
+    def __init__(self, run_id: str | None = None, prior: Counter[str] | None = None) -> None:
         self.t0 = time.perf_counter()
-        self.run_id = uuid.uuid4().hex[:12]
-        self.attempts: Counter[str] = Counter()
+        self.run_id = run_id or new_run_id()
+        self.attempts: Counter[str] = Counter(prior or {})
+        """Pour un fork, on repart du nombre de passages déjà faits par chaque nœud."""
         self.started: dict[str, tuple[str, int, int]] = {}  # task id → (node, attempt, ts)
         self.failed: dict[str, NodeFinished] = {}  # nœud → fin en erreur, en attente du handler
         self.final: RunFinished | None = None

@@ -3,20 +3,29 @@
 - `POST /v1/turns` : l'API de prod, appelée par dialog. Un tour entre, une réponse JSON sort.
 - `GET /graph` : la topologie du graphe compilé, pour la console.
 - `POST /debug/runs` : le même tour, en flux SSE nœud par nœud, avec pannes injectables.
-  Désactivé quand `PAWRISE_DEBUG_API=false`.
+- `POST /debug/runs/{id}/fork` : rejoue un tour depuis un nœud, en le réexécutant ou en forçant
+  sa sortie. Les routes /debug sont désactivées quand `PAWRISE_DEBUG_API=false`.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from pawrise_assistant.api.events import EventMapper, RunStarted, map_stream
+from pawrise_assistant.api.events import (
+    EventMapper,
+    RunStarted,
+    map_stream,
+    new_run_id,
+    reused_steps,
+)
 from pawrise_assistant.api.scenarios import SCENARIOS, Scenario
 from pawrise_assistant.api.settings import Settings
 from pawrise_assistant.components.audit import JsonlAuditSink
@@ -25,6 +34,7 @@ from pawrise_assistant.domain.models import AlertContext, AssistantResponse, Tur
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.builder import build_graph
 from pawrise_assistant.graph.deps import FAULTS, Deps, dev_deps
+from pawrise_assistant.graph.replay import ReplayError, RunRegistry, debug_checkpointer, fork_config
 from pawrise_assistant.graph.topology import Topology, build_topology
 
 
@@ -93,36 +103,85 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
     async def faults() -> list[str]:
         return sorted(FAULTS)
 
-    @app.post("/debug/runs")
-    async def debug_run(req: DebugRunRequest) -> EventSourceResponse:
+    saver = debug_checkpointer()
+    debug_graph = build_graph(checkpointer=saver)
+    registry = RunRegistry(saver)
+
+    def _deps(faults: list[str]) -> Deps:
         try:
-            run_deps = deps.for_run(frozenset(req.faults))
+            return deps.for_run(frozenset(faults))
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
-        mapper = EventMapper()
+
+    def _stream(
+        graph_input: Any, config: RunnableConfig, run_deps: Deps, started: RunStarted
+    ) -> EventSourceResponse:
+        prior = Counter(step.node for step in started.reused)
+        mapper = EventMapper(run_id=started.run_id, prior=prior)
+        thread: RunnableConfig = {
+            "configurable": {"thread_id": config.get("configurable", {})["thread_id"]}
+        }
+
+        async def stream() -> AsyncIterator[dict[str, Any]]:
+            yield _sse(started)
+            parts = debug_graph.astream(
+                graph_input,
+                config,
+                context=run_deps,
+                stream_mode=["updates", "tasks"],
+                version="v2",
+                durability="sync",
+            )
+            async for event in map_stream(parts, mapper):
+                yield _sse(event)
+            registry.record(started.run_id, (await debug_graph.aget_state(thread)).config)
+
+        return EventSourceResponse(stream())
+
+    @app.post("/debug/runs")
+    async def debug_run(req: DebugRunRequest) -> EventSourceResponse:
+        run_deps = _deps(req.faults)
+        run_id = new_run_id()
         turn = TurnRequest(
-            thread_id=f"debug-{mapper.run_id}",
+            thread_id=f"debug-{run_id}",
             turn_id="t1",
             pet_ref=req.pet_ref,
             user_message=req.user_message,
             history=req.history,
             alert_context=req.alert_context,
         )
+        started = RunStarted(run_id=run_id, input=req.model_dump(mode="json"))
+        config: RunnableConfig = {"configurable": {"thread_id": run_id}}
+        return _stream(initial_state(turn), config, run_deps, started)
 
-        async def stream() -> AsyncIterator[dict[str, Any]]:
-            yield _sse(RunStarted(run_id=mapper.run_id, input=req.model_dump(mode="json")))
-            parts = graph.astream(
-                initial_state(turn),
-                context=run_deps,
-                stream_mode=["updates", "tasks"],
-                version="v2",
+    @app.post("/debug/runs/{run_id}/fork")
+    async def fork_run(run_id: str, req: ForkRequest) -> EventSourceResponse:
+        run_deps = _deps(req.faults)
+        try:
+            config = await fork_config(
+                debug_graph, registry.head(run_id), req.node, req.attempt, req.overrides
             )
-            async for event in map_stream(parts, mapper):
-                yield _sse(event)
-
-        return EventSourceResponse(stream())
+        except ReplayError as e:
+            raise HTTPException(404 if "inconnu" in str(e) else 422, str(e)) from e
+        state = await debug_graph.aget_state(config)
+        started = RunStarted(
+            run_id=new_run_id(),
+            input={"faults": req.faults, "overrides": req.overrides},
+            fork_of=run_id,
+            from_node=req.node,
+            from_attempt=req.attempt,
+            reused=reused_steps(state.values.get("trace", [])),
+        )
+        return _stream(None, config, run_deps, started)
 
     return app
+
+
+class ForkRequest(BaseModel):
+    node: str
+    attempt: int = Field(default=1, ge=1)
+    overrides: dict[str, Any] | None = None
+    faults: list[str] = Field(default_factory=list)
 
 
 def _sse(event: BaseModel) -> dict[str, Any]:

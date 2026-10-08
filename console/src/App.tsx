@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react'
-import { fetchFaults, fetchScenarios, fetchTopology, runDebug } from '@/api/client'
+import { fetchFaults, fetchScenarios, fetchTopology, forkRun, runDebug } from '@/api/client'
 import type { Scenario, Topology, TopologyNode } from '@/api/types'
 import { AnswerPanel } from '@/components/AnswerPanel'
-import { Inspector } from '@/components/Inspector'
+import { Inspector, type ReplayActions } from '@/components/Inspector'
 import { Timeline } from '@/components/Timeline'
 import { Button } from '@/components/ui/button'
 import { GraphCanvas } from '@/graph/GraphCanvas'
@@ -89,34 +89,51 @@ export default function App() {
     return () => cancelAnimationFrame(raf)
   }, [playing, total, finished])
 
+  /** Lance un flux (tour ou fork) en repartant du début de la chronologie. */
+  const play = useCallback(async (start: (signal: AbortSignal) => Promise<void>) => {
+    abort.current?.abort()
+    abort.current = new AbortController()
+    setCursor(0)
+    setPlaying(true)
+    try {
+      await start(abort.current.signal)
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        dispatch({ type: 'run_error', ts_ms: 0, message: (err as Error).message })
+      }
+    }
+  }, [])
+
   const launch = useCallback(
-    async (e?: FormEvent) => {
+    (e?: FormEvent) => {
       e?.preventDefault()
       if (!message.trim()) return
-      abort.current?.abort()
-      abort.current = new AbortController()
-      setCursor(0)
-      setPlaying(true)
       const sameScenario = scenario?.user_message === message
-      try {
-        await runDebug(
-          {
-            user_message: message,
-            pet_ref: scenario?.pet_ref ?? 'pet_demo_rex',
-            alert_context: sameScenario ? (scenario?.alert_context ?? null) : null,
-            faults,
-          },
-          dispatch,
-          abort.current.signal,
-        )
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          dispatch({ type: 'run_error', ts_ms: 0, message: (err as Error).message })
-        }
+      const req = {
+        user_message: message,
+        pet_ref: scenario?.pet_ref ?? 'pet_demo_rex',
+        alert_context: sameScenario ? (scenario?.alert_context ?? null) : null,
+        faults,
       }
+      void play((signal) => runDebug(req, dispatch, signal))
     },
-    [message, scenario, faults],
+    [message, scenario, faults, play],
   )
+
+  const replay = useMemo<ReplayActions | undefined>(() => {
+    const runId = run.runId
+    if (!runId) return undefined
+    return {
+      rerun: (node, attempt) =>
+        void play((signal) =>
+          forkRun(runId, { node, attempt, overrides: null, faults }, dispatch, signal),
+        ),
+      force: (node, overrides) =>
+        void play((signal) =>
+          forkRun(runId, { node, attempt: 1, overrides, faults }, dispatch, signal),
+        ),
+    }
+  }, [run.runId, faults, play])
 
   if (loadError) {
     return (
@@ -140,6 +157,12 @@ export default function App() {
       <header className="flex flex-wrap items-center gap-3 border-b bg-white px-5 py-3">
         <span className="font-semibold">Pawrise Assistant</span>
         <span className="text-xs text-zinc-500">console · graphe vivant</span>
+        {run.forkOf ? (
+          <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs text-violet-900">
+            Rejoué depuis {meta[run.forkOf.node]?.label ?? run.forkOf.node}
+            {run.forkOf.attempt > 1 ? ` (passage ${run.forkOf.attempt})` : ''}
+          </span>
+        ) : null}
         <div className="flex-1" />
         <nav aria-label="Scénarios" className="flex flex-wrap gap-1.5">
           {scenarios.map((s) => (
@@ -261,6 +284,8 @@ export default function App() {
               meta={selected ? meta[selected] : undefined}
               snap={selected ? snap.nodes[selected] : undefined}
               attempts={selectedAttempts}
+              replay={replay}
+              canReplay={run.phase === 'done' || run.phase === 'error'}
             />
           </div>
           <div className="border-t p-5">
