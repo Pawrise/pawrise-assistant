@@ -35,3 +35,6 @@ class Settings(BaseSettings):
     embedder: Literal["hash", "openai"] = "hash"
     reranker: Literal["overlap", "cohere"] = "overlap"
     cohere_token: SecretStr | None = None
+
+    otel: bool = False
+    """Export OTLP des spans (endpoint et en-têtes : variables OpenTelemetry standard)."""

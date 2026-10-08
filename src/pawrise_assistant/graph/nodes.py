@@ -35,6 +35,7 @@ from pawrise_assistant.domain.models import (
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.deps import Deps
 from pawrise_assistant.llm.provider import summarize, usage_scope
+from pawrise_assistant.tracing import node_span
 
 Update = dict[str, Any]
 
@@ -374,5 +375,22 @@ def metered(node: Callable[[AssistantState, Runtime[Deps]], Awaitable[Update]]) 
                 ),
             ]
         return update
+
+    return wrapper
+
+
+def traced(name: str, node: Callable[..., Awaitable[Update]]) -> Any:
+    """Un span OpenTelemetry par passage dans le nœud (sans contenu : statut et résumé seulement)."""
+
+    @functools.wraps(node)
+    async def wrapper(*args: Any, **kwargs: Any) -> Update:
+        with node_span(name) as span:
+            update = await node(*args, **kwargs)
+            last = (update.get("trace") or [None])[-1]
+            if isinstance(last, NodeTrace):
+                span.set_attribute("pawrise.status", last.status)
+                if last.cost_eur:
+                    span.set_attribute("pawrise.cost_eur", last.cost_eur)
+            return update
 
     return wrapper

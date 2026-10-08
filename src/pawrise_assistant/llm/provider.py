@@ -97,21 +97,27 @@ class OpenAIProvider:
     async def parse(
         self, *, tier: Tier, system: str, user: str, schema: type[T], max_tokens: int = 800
     ) -> T:
+        from pawrise_assistant.tracing import llm_span
+
         model = self.models[tier]
-        try:
-            result = await self.client.responses.parse(
-                model=model,
-                instructions=system,
-                input=user,
-                text_format=schema,
-                max_output_tokens=max_tokens,
-                store=False,
-            )
-        except Exception as e:  # réseau, quota, refus : le nœud décide (fail-open ou fermé)
-            raise LLMUnavailable(f"{model} : {e}") from e
-        usage = getattr(result, "usage", None)
-        if usage is not None:
-            record(Usage(model, usage.input_tokens, usage.output_tokens))
+        with llm_span(model) as span:
+            try:
+                result = await self.client.responses.parse(
+                    model=model,
+                    instructions=system,
+                    input=user,
+                    text_format=schema,
+                    max_output_tokens=max_tokens,
+                    store=False,
+                )
+            except Exception as e:  # réseau, quota, refus : le nœud décide (fail-open ou fermé)
+                span.set_attribute("error.type", type(e).__name__)
+                raise LLMUnavailable(f"{model} : {e}") from e
+            usage = getattr(result, "usage", None)
+            if usage is not None:
+                record(Usage(model, usage.input_tokens, usage.output_tokens))
+                span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens)
+                span.set_attribute("gen_ai.usage.output_tokens", usage.output_tokens)
         parsed = result.output_parsed
         if parsed is None:
             raise LLMUnavailable(f"{model} : sortie structurée absente")

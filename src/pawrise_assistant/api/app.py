@@ -13,12 +13,13 @@ from collections import Counter
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from pawrise_assistant import tracing
 from pawrise_assistant.api.events import (
     EventMapper,
     RunStarted,
@@ -67,6 +68,8 @@ def initial_state(req: TurnRequest) -> AssistantState:
 
 def create_app(settings: Settings | None = None, deps: Deps | None = None) -> FastAPI:
     settings = settings or Settings()
+    if settings.otel:
+        tracing.setup()
     if deps is None:
         deps = build_deps(settings, JsonlAuditSink(settings.audit_path))
     graph = build_graph()
@@ -86,17 +89,23 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
         return {"status": "ok"}
 
     @app.post("/v1/turns")
-    async def turns(req: TurnRequest) -> AssistantResponse:
-        out = await graph.ainvoke(initial_state(req), context=deps.for_run())
-        response: AssistantResponse = out["response"]
-        return response
+    async def turns(req: TurnRequest, request: Request) -> AssistantResponse:
+        with tracing.turn_span(
+            "turn", request.headers, **{"pawrise.thread_id": req.thread_id}
+        ) as span:
+            out = await graph.ainvoke(initial_state(req), context=deps.for_run())
+            response: AssistantResponse = out["response"]
+            span.set_attribute("pawrise.path", response.metadata.path)
+            span.set_attribute("pawrise.escalation", response.escalation.trigger)
+            return response
 
     @app.post("/v1/handoff-summaries")
-    async def handoff_summaries(req: HandoffRequest) -> HandoffSummary:
-        try:
-            return await generate_handoff_summary(handoff_graph, req, deps.for_run())
-        except HandoffInvalid as e:
-            raise HTTPException(422, f"dossier non conforme : {e}") from e
+    async def handoff_summaries(req: HandoffRequest, request: Request) -> HandoffSummary:
+        with tracing.turn_span("handoff", request.headers, **{"pawrise.thread_id": req.thread_id}):
+            try:
+                return await generate_handoff_summary(handoff_graph, req, deps.for_run())
+            except HandoffInvalid as e:
+                raise HTTPException(422, f"dossier non conforme : {e}") from e
 
     @app.get("/graph")
     async def graph_topology(name: Literal["turn", "handoff"] = "turn") -> Topology:
