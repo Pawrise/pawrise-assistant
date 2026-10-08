@@ -16,7 +16,7 @@ from typing import Any
 
 from langgraph.runtime import Runtime
 
-from pawrise_assistant.components.guardrail import GuardrailContext
+from pawrise_assistant.components.guardrail import GuardrailContext, escalation_rules
 from pawrise_assistant.components.pii import redact
 from pawrise_assistant.components.safe_responses import FALLBACK, SAFE_RESPONSES, URGENT_PREFIX
 from pawrise_assistant.domain.models import (
@@ -320,8 +320,16 @@ async def finalize(state: AssistantState, runtime: Runtime[Deps]) -> Update:
             verdict.escalation,
             _citations(state),
         )
-        if escalation.urgency == "high":
-            text = URGENT_PREFIX + text
+    # Filet de sécurité déterministe : un signal d'urgence dans le message passe devant tout,
+    # quelle que soit la sortie (réponse rédigée, encadrée ou de repli).
+    if template_id not in ("SR-JB-01", "SR-ABUSE-01", "SR-OOS-01"):
+        urgent = escalation_rules(
+            GuardrailContext(user_message=state["user_message"], chunks=[], pet=None, alert=None)
+        )
+        if urgent.urgency == "high":
+            escalation = urgent
+    if escalation.urgency == "high":
+        text = URGENT_PREFIX + text
     path = [t.node for t in state["trace"]] + ["finalize"]
     response = AssistantResponse(
         response_text=text,

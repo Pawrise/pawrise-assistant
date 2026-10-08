@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from typing import Protocol
 
-from pawrise_assistant.components.text import fold
+from pawrise_assistant.components.text import fold, sentences
 from pawrise_assistant.domain.models import (
     TELEMETRY_SOURCE,
     AlertContext,
@@ -113,6 +113,14 @@ class RuleGuardrail:
         reasons += [f"affirmation sans source : « {c.text} »" for c in checks if not c.grounded]
         if not draft.response_text.strip():
             reasons.append("réponse vide")
+        if (
+            not draft.claims
+        ):  # réponse libre (small-talk) : pas de source, mais jamais de diagnostic
+            reasons += [
+                f"langage diagnostique : « {s} »"
+                for s in sentences(draft.response_text)
+                if is_diagnostic(s)
+            ]
         escalation = escalation_rules(ctx)
         if not escalation.trigger and draft.escalation.trigger:
             escalation = draft.escalation

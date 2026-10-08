@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     """Vide pour OpenAI ; l'URL de la ressource Azure OpenAI (`…/openai/v1/`) en cible EU."""
     llm_model_nano: str = "gpt-5.4-nano"
     llm_model_main: str = "gpt-5.4"
+    llm_reasoning_effort: str | None = "low"
+    """Pour les modèles à raisonnement : `low` réduit la latence ; vide pour ne rien envoyer."""
 
     retriever: Literal["memory", "postgres"] = "memory"
     database_url: str | None = None

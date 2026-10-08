@@ -81,11 +81,12 @@ class LLMQueryUnderstanding:
             schema=UnderstandingOut,
             max_tokens=160,
         )
+        # On cherche avec les mots-clés du LLM ET ceux du propriétaire : la recherche lexicale
+        # rate les fiches quand la reformulation s'éloigne trop des mots d'origine.
+        query = f"{out.canonical_query} · {message}"
         if alert is not None:  # flux B : le contexte de l'alerte est toujours chargé
-            return Understanding(out.canonical_query, True, 7, 7)
-        return Understanding(
-            out.canonical_query, out.needs_retrieval, out.telemetry_days, out.alerts_days
-        )
+            return Understanding(query, True, 7, 7)
+        return Understanding(query, out.needs_retrieval, out.telemetry_days, out.alerts_days)
 
 
 # — Nœud 5 —
@@ -115,6 +116,10 @@ def _context(message: str, pet: PetContext | None, chunks: list[Chunk]) -> str:
     return "\n\n".join(parts)
 
 
+class SmallTalkOut(BaseModel):
+    text: str = Field(min_length=1, max_length=300)
+
+
 class LLMGenerator:
     name = "LLM principal"
 
@@ -132,6 +137,16 @@ class LLMGenerator:
     ) -> DraftAnswer:
         if "llm_down" in faults:
             raise LLMUnavailable("fournisseur LLM injoignable (panne injectée)")
+        if not chunks:  # échange courant : pas de passage, donc pas d'affirmation à sourcer
+            name = pet.profile.name if pet and pet.profile else None
+            reply = await self.provider.parse(
+                tier="nano",
+                system=prompts.load("small_talk"),
+                user=message if not name else f"{message}\n\n[Chien : {name}]",
+                schema=SmallTalkOut,
+                max_tokens=80,
+            )
+            return DraftAnswer(response_text=reply.text)
         system = prompts.load("generation")
         if hardened:
             system += "\n\n" + prompts.load("generation_hardened")

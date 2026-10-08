@@ -206,3 +206,78 @@ async def test_openai_provider_records_usage_and_wraps_errors() -> None:
         )
         with pytest.raises(LLMUnavailable):
             await p.parse(tier="nano", system="s", user="u", schema=IntentOut)
+
+
+async def test_urgency_wins_even_when_the_classifier_redirects() -> None:
+    """Constaté en réel : le LLM classait « il a mangé du chocolat » en demande de diagnostic."""
+    p = ScriptedProvider(
+        {
+            "IntentOut": [
+                IntentOut(intent="diagnosis_request", confidence=0.9, reason="trop prudent")
+            ]
+        }
+    )
+    deps = llm_deps(p, audit=MemoryAuditSink())
+    req = TurnRequest(
+        thread_id="t",
+        turn_id="1",
+        pet_ref="pet_demo_rex",
+        user_message="Il a avalé un raisin mais il a l'air en pleine forme",
+    )
+    out = await build_graph().ainvoke(initial_state(req), context=deps.for_run())
+    r = out["response"]
+    assert r.metadata.template_id == "SR-DIAG-01"
+    assert r.escalation.urgency == "high"
+    assert r.response_text.startswith("Contactez un vétérinaire dès maintenant")
+
+
+async def test_small_talk_gets_a_short_reply_instead_of_a_fallback() -> None:
+    from pawrise_assistant.llm.components import SmallTalkOut
+
+    p = ScriptedProvider(
+        {
+            "IntentOut": [IntentOut(intent="clean", confidence=1, reason="merci")],
+            "UnderstandingOut": [
+                UnderstandingOut(
+                    canonical_query="merci",
+                    needs_retrieval=False,
+                    telemetry_days=None,
+                    alerts_days=None,
+                )
+            ],
+            "SmallTalkOut": [SmallTalkOut(text="Avec plaisir, je reste là pour Rex !")],
+            "GuardrailOut": [],
+        }
+    )
+    deps = llm_deps(p, audit=MemoryAuditSink())
+    req = TurnRequest(thread_id="t", turn_id="1", pet_ref="pet_demo_rex", user_message="Merci !")
+    out = await build_graph().ainvoke(initial_state(req), context=deps.for_run())
+    assert out["response"].metadata.template_id is None
+    assert out["response"].response_text == "Avec plaisir, je reste là pour Rex !"
+    assert not out["response"].escalation.trigger
+
+
+async def test_free_reply_with_diagnostic_wording_is_still_rejected() -> None:
+    from pawrise_assistant.components.guardrail import RuleGuardrail
+
+    ctx = GuardrailContext(user_message="Merci", chunks=[], pet=None, alert=None)
+    bad = DraftAnswer(response_text="De rien ! Il s'agit probablement d'une otite.")
+    assert not (await RuleGuardrail().check(bad, ctx)).passed
+
+
+async def test_reasoning_effort_is_dropped_when_the_model_refuses_it() -> None:
+    calls: list[dict[str, Any]] = []
+
+    class Responses:
+        async def parse(self, **kwargs: Any) -> Any:
+            calls.append(kwargs)
+            if "reasoning" in kwargs:
+                raise RuntimeError("Unsupported parameter: 'reasoning'")
+            return SimpleNamespace(
+                output_parsed=IntentOut(intent="clean", confidence=1, reason="r"), usage=None
+            )
+
+    p = OpenAIProvider(SimpleNamespace(responses=Responses()), {"nano": "m", "main": "m"}, "low")
+    await p.parse(tier="nano", system="s", user="u", schema=IntentOut)
+    await p.parse(tier="nano", system="s", user="u", schema=IntentOut)
+    assert ["reasoning" in c for c in calls] == [True, False, False]
