@@ -33,13 +33,13 @@ curl -N http://127.0.0.1:8100/v1/turns/stream -H 'content-type: application/json
 
 ## La console
 
-Le graphe complet, en direct : chaque nœud s'allume quand il travaille, l'arête empruntée se trace,
-les nœuds jamais appelés passent en pointillés. Une chronologie permet de rejouer le tour pas à pas,
-et l'inspecteur montre ce que chaque nœud a lu, écrit et décidé (intention, outils appelés,
-passages retenus, vérification claim par claim).
+Trois vues, sur téléphone, tablette et ordinateur :
 
-Sept scénarios prêts à lancer, et des pannes à injecter (LLM, reranker, Core API…) pour vérifier
-que le graphe échoue fermé aux deux bouts et ouvert au milieu.
+- **Discuter** : l'assistant tel que le propriétaire le voit, avec les phrases d'attente en direct.
+- **Parcours** : le chemin de chaque réponse, étape par étape. Chaque étape dit qui la fait (IA,
+  règle, recherche, texte fixe) ; on rejoue le tour et on relance depuis n'importe quelle étape.
+- **Tester** : les scénarios et leur résultat attendu, « Tout lancer », et des pannes à simuler
+  (IA, recherche, Core API…) pour vérifier que l'assistant reste prudent.
 
 ## Configuration
 

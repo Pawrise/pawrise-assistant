@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from typing import Protocol
 
-from pawrise_assistant.components.text import fold, sentences
+from pawrise_assistant.components.text import fold, sentences, stem, tokens
 from pawrise_assistant.domain.models import (
     MESSAGE_SOURCE,
     TELEMETRY_SOURCE,
@@ -65,6 +65,40 @@ _VET_REFERRAL = re.compile(
     r"\bveterinaire\b.{0,40}\b(consult|avis|examin|contact|appel|voir|montr)"
     r"|\b(consult|avis|examin|contact|appel|voir|montr)\w*\b.{0,40}\bveterinaire\b"
 )
+
+
+_REPORTING = frozenset(
+    [
+        "vous",
+        "dites",
+        "dit",
+        "indiquez",
+        "indique",
+        "mentionnez",
+        "signalez",
+        "precisez",
+        "expliquez",
+        "proprietaire",
+        "avez",
+        "que",
+        "qu",
+        "selon",
+        "votre",
+        "vos",
+        "message",
+    ]
+)
+
+
+def restates_message(text: str, message: str) -> bool:
+    """Une phrase qui ne fait que reprendre les mots du propriétaire : sa source, c'est le message.
+
+    Constaté en réel : « Vous dites que Rex dort beaucoup depuis quelques jours » était rédigé sans
+    source, rejeté deux fois, et une question anodine finissait en réponse de repli (16 s).
+    """
+    said = {stem(w) for w in tokens(message)}
+    words = [stem(w) for w in tokens(text) if w not in _REPORTING]
+    return bool(words) and all(w in said for w in words) and not is_diagnostic(text)
 
 
 def is_vet_referral(text: str) -> bool:
@@ -139,7 +173,8 @@ class RuleGuardrail:
             ClaimCheck(
                 text=c.text,
                 grounded=(bool(c.source_ids) and set(c.source_ids) <= allowed)
-                or is_vet_referral(c.text),
+                or is_vet_referral(c.text)
+                or restates_message(c.text, ctx.user_message),
                 diagnostic=is_diagnostic(c.text),
                 source_ids=c.source_ids,
             )

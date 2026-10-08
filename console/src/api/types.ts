@@ -3,6 +3,8 @@
 // exemples d'événements réels enregistrés depuis l'API.
 
 export type NodeKind = 'terminal' | 'step' | 'exit' | 'output' | 'tool' | 'router'
+/** Qui fait le travail : l'IA, une règle écrite, la recherche, un texte fixe, des données. */
+export type Actor = 'ai' | 'rule' | 'search' | 'text' | 'data'
 export type EdgeKind = 'normal' | 'conditional' | 'error' | 'tool'
 
 export interface TopologyNode {
@@ -12,6 +14,7 @@ export interface TopologyNode {
   role: string
   on_error: string | null
   step: number | null
+  actor: Actor | null
 }
 
 export interface TopologyEdge {
@@ -67,6 +70,24 @@ export interface Scenario {
   user_message: string
   alert_context: AlertContext | null
   faults: string[]
+  /** Le résultat attendu, en clair. */
+  expect: string
+  expect_template: string | null
+  expect_vet: boolean
+}
+
+export interface Pet {
+  pet_ref: string
+  name: string
+  breed: string
+  age_years: number
+}
+
+export interface Info {
+  ai: boolean
+  models: string[]
+  retriever: string
+  pets: Pet[]
 }
 
 export interface RunRequest {
@@ -74,6 +95,7 @@ export interface RunRequest {
   pet_ref: string
   alert_context: AlertContext | null
   faults: string[]
+  history?: { role: 'owner' | 'assistant'; content: string }[]
 }
 
 export interface ReusedStep {

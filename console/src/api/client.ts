@@ -3,6 +3,7 @@ import type {
   ForkRequest,
   GraphName,
   HandoffRequest,
+  Info,
   RunRequest,
   Scenario,
   Topology,
@@ -18,6 +19,7 @@ export const fetchTopology = (name: GraphName = 'turn') =>
   getJson<Topology>(`/graph?name=${name}`)
 export const fetchScenarios = () => getJson<Scenario[]>('/debug/scenarios')
 export const fetchFaults = () => getJson<string[]>('/debug/faults')
+export const fetchInfo = () => getJson<Info>('/debug/info')
 
 /** Découpe un flux SSE en messages `data:` complets. Exporté pour les tests. */
 export function parseSseChunk(buffer: string): { events: string[]; rest: string } {

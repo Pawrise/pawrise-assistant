@@ -1,16 +1,14 @@
+// Ce que chaque étape a lu, écrit et décidé, rendu lisiblement. Le JSON brut reste accessible.
+
 import type { ReactNode } from 'react'
-import type { TopologyNode } from '@/api/types'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { fmtEur } from '@/app/labels'
 import { cn } from '@/lib/utils'
-import type { Attempt, NodeSnapshot } from '@/run/model'
-import { VIEW, fmtMs } from '@/run/status'
 
 type Data = Record<string, unknown>
 
 function Row({ k, children }: { k: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[112px_1fr] gap-3 py-1.5 text-[13px]">
+    <div className="grid grid-cols-[96px_1fr] gap-3 py-1.5 text-[13px]">
       <dt className="text-zinc-500">{k}</dt>
       <dd className="min-w-0 break-words">{children}</dd>
     </div>
@@ -30,7 +28,7 @@ function Tick({ ok }: { ok: boolean }) {
 }
 
 /** Un rendu lisible par type de nœud ; le JSON brut reste accessible en dessous. */
-function Details({ node, data }: { node: string; data: Data }) {
+export function Details({ node, data }: { node: string; data: Data }) {
   if (data.forced) {
     return (
       <dl>
@@ -241,136 +239,16 @@ function Details({ node, data }: { node: string; data: Data }) {
   }
 }
 
-type LlmUsageData = { models: string[]; tokens_in: number; tokens_out: number; cost_eur: number }
+export type LlmUsageData = { models: string[]; tokens_in: number; tokens_out: number; cost_eur: number }
 
-function LlmUsage({ usage }: { usage: LlmUsageData }) {
+export function LlmUsage({ usage }: { usage: LlmUsageData }) {
   return (
-    <p className="flex flex-wrap gap-x-3 text-xs text-violet-900">
-      <span className="font-mono">{usage.models.join(', ')}</span>
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs text-violet-900">
+      <span className="font-medium">{usage.models.join(', ')}</span>
       <span>
         {usage.tokens_in} → {usage.tokens_out} tokens
       </span>
-      <span>{usage.cost_eur.toFixed(4).replace('.', ',')} €</span>
+      <span>{fmtEur(usage.cost_eur)}</span>
     </p>
-  )
-}
-
-/** Ce qu'on peut forcer depuis la console, par nœud (miroir de `graph/replay.py`). */
-const FORCE: Record<string, { label: string; overrides: Record<string, unknown> }[]> = {
-  circuit_breaker: [
-    { label: 'à traiter', overrides: { intent: 'clean' } },
-    { label: 'diagnostic', overrides: { intent: 'diagnosis_request' } },
-    { label: 'détournement', overrides: { intent: 'jailbreak' } },
-    { label: 'hors sujet', overrides: { intent: 'out_of_scope' } },
-  ],
-  query_understanding: [
-    { label: 'rien à chercher', overrides: { needs_retrieval: false } },
-    { label: 'chercher', overrides: { needs_retrieval: true } },
-  ],
-}
-
-export interface ReplayActions {
-  rerun: (node: string, attempt: number) => void
-  force: (node: string, overrides: Record<string, unknown>) => void
-}
-
-export function Inspector({
-  meta,
-  snap,
-  attempts,
-  replay,
-  canReplay,
-}: {
-  meta: TopologyNode | undefined
-  snap: NodeSnapshot | undefined
-  attempts: Attempt[]
-  replay?: ReplayActions
-  canReplay?: boolean
-}) {
-  if (!meta) {
-    return <p className="p-5 text-sm text-zinc-500">Cliquez sur un nœud du graphe.</p>
-  }
-  const v = VIEW[snap?.view ?? 'pending']
-  return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-4 p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">
-              {meta.step ? `${meta.step} · ` : ''}
-              {meta.label}
-            </h2>
-            <p className="font-mono text-xs text-zinc-500">{meta.id}</p>
-          </div>
-          <Badge variant="outline" className={cn('border-0', v.badge)}>
-            {v.glyph} {v.word}
-          </Badge>
-        </div>
-        <p className="text-sm text-zinc-700">{meta.role}</p>
-        {meta.on_error ? (
-          <p className="text-xs text-zinc-500">
-            En cas de panne : <span className="font-medium text-zinc-700">{meta.on_error}</span>
-          </p>
-        ) : null}
-        {replay && canReplay && meta.id in FORCE ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs">
-            <span className="font-medium text-violet-900">Forcer la sortie :</span>
-            {FORCE[meta.id].map((f) => (
-              <button
-                key={f.label}
-                type="button"
-                onClick={() => replay.force(meta.id, f.overrides)}
-                className="rounded border border-violet-300 bg-white px-1.5 py-0.5 text-violet-900 hover:bg-violet-100"
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {attempts.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-3 text-sm text-zinc-600">
-            {snap?.view === 'skipped'
-              ? "Ce nœud n'a pas été appelé : le graphe a pris un autre chemin."
-              : 'Pas encore atteint.'}
-          </p>
-        ) : (
-          attempts.map((a) => (
-            <section key={a.attempt} className="overflow-hidden rounded-lg border">
-              <header className="flex items-center justify-between gap-2 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-                <span>
-                  Passage {a.attempt}
-                  {a.status ? ` · ${VIEW[a.status].word}` : ' · en cours'}
-                  {a.reused ? ' · repris du tour d’origine' : ''}
-                </span>
-                <span className="flex items-center gap-2">
-                  {a.reused ? null : (a.durationMs !== null ? fmtMs(a.durationMs) : '…')}
-                  {replay && canReplay ? (
-                    <button
-                      type="button"
-                      onClick={() => replay.rerun(a.node, a.attempt)}
-                      className="rounded border bg-white px-1.5 py-0.5 text-zinc-700 hover:bg-zinc-100"
-                      title="Repartir juste avant ce passage, avec les pannes sélectionnées en haut"
-                    >
-                      Rejouer d’ici
-                    </button>
-                  ) : null}
-                </span>
-              </header>
-              <div className="flex flex-col gap-2 px-3 py-2">
-                <p className="text-sm font-medium">{a.summary || '…'}</p>
-                {a.data.llm ? <LlmUsage usage={a.data.llm as LlmUsageData} /> : null}
-                {a.status ? <Details node={a.node} data={a.data} /> : null}
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-zinc-500">Données brutes</summary>
-                  <pre className="mt-1 max-h-64 overflow-auto rounded bg-zinc-50 p-2 font-mono text-[11px] whitespace-pre-wrap">
-                    {JSON.stringify(a.data, null, 2)}
-                  </pre>
-                </details>
-              </div>
-            </section>
-          ))
-        )}
-      </div>
-    </ScrollArea>
   )
 }

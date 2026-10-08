@@ -34,6 +34,7 @@ from pawrise_assistant.api.events import (
 from pawrise_assistant.api.scenarios import SCENARIOS, Scenario
 from pawrise_assistant.api.settings import Settings
 from pawrise_assistant.components.audit import JsonlAuditSink
+from pawrise_assistant.core_api import fake_data
 from pawrise_assistant.domain.models import AlertContext, AssistantResponse, Turn, TurnRequest
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.builder import build_graph
@@ -154,6 +155,20 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
                 yield _sse(event)
 
         return EventSourceResponse(stream())
+
+    @app.get("/debug/info")
+    async def info() -> dict[str, Any]:
+        """Ce qui tourne, pour l'en-tête de la console, et les chiens de démonstration."""
+        ai = settings.llm == "openai"
+        return {
+            "ai": ai,
+            "models": [settings.llm_model_nano, settings.llm_model_main] if ai else [],
+            "retriever": settings.retriever,
+            "pets": [
+                {"pet_ref": p.pet_ref, "name": p.name, "breed": p.breed, "age_years": p.age_years}
+                for p in fake_data.PROFILES.values()
+            ],
+        }
 
     @app.get("/debug/scenarios")
     async def scenarios() -> list[Scenario]:

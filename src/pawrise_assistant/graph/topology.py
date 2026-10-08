@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from pawrise_assistant.graph.builder import ON_ERROR
 
 NodeKind = Literal["terminal", "step", "exit", "output", "tool", "router"]
+Actor = Literal["ai", "rule", "search", "text", "data"]
 
 
 class NodeMeta(BaseModel):
@@ -23,6 +24,7 @@ class NodeMeta(BaseModel):
     role: str
     on_error: str | None = None
     step: int | None = None
+    actor: Actor | None = None
 
 
 class EdgeMeta(BaseModel):
@@ -38,62 +40,93 @@ class Topology(BaseModel):
 
 
 NODE_META: dict[str, tuple[str, NodeKind, str, int | None]] = {
-    "__start__": ("Début", "terminal", "Un tour arrive de dialog.", None),
-    "redact": ("Masquer", "step", "Retire e-mails, téléphones, IBAN… avant tout appel LLM.", None),
-    "gate": (
-        "Aiguiller",
-        "router",
-        "Attend le tri et la reformulation, lancés en parallèle, puis choisit la suite.",
+    "__start__": ("Début", "terminal", "Le message arrive de dialog.", None),
+    "redact": (
+        "Masquer les données perso",
+        "step",
+        "Retire téléphone, e-mail, IBAN… avant tout appel à l'IA.",
         None,
     ),
     "circuit_breaker": (
-        "Comprendre la demande",
+        "Trier la demande",
         "step",
-        "Trie le message. Diagnostic ou détournement : arrêt ici.",
+        "Question santé, demande de diagnostic, détournement ou hors sujet ?",
         1,
     ),
     "query_understanding": (
-        "Reformuler",
+        "Comprendre le contexte",
         "step",
-        "Reformule en termes vétérinaires et charge les données du chien.",
+        "Reformule la question et charge le profil, le collier et les alertes du chien.",
         2,
     ),
-    "retrieval": ("Chercher", "step", "Cherche 20 passages dans la base vétérinaire.", 3),
-    "relevance_filter": ("Garder l'utile", "step", "Garde les 5 passages les plus utiles.", 4),
-    "generation": ("Rédiger", "step", "Rédige à partir des seuls passages et données fournis.", 5),
+    "gate": (
+        "Choisir la suite",
+        "router",
+        "Attend les deux étapes précédentes, puis oriente le message.",
+        None,
+    ),
+    "retrieval": ("Chercher", "step", "Trouve 20 passages dans les fiches santé.", 3),
+    "relevance_filter": (
+        "Garder les meilleurs",
+        "step",
+        "Ne garde que les 5 passages les plus utiles.",
+        4,
+    ),
+    "generation": ("Rédiger", "step", "Écrit la réponse à partir des seules sources trouvées.", 5),
     "guardrail": (
         "Vérifier",
         "step",
-        "Chaque affirmation doit avoir une source. Sinon, 2ᵉ essai puis repli.",
+        "Chaque phrase doit avoir une source et aucun diagnostic. Sinon, 2ᵉ essai.",
         6,
     ),
     "safe_response": (
-        "Réponse encadrée",
+        "Refus poli",
         "exit",
-        "Texte écrit à l'avance, sans vétérinaire.",
+        "Quand : insulte, détournement, hors sujet.",
         None,
     ),
     "safe_response_escalate": (
-        "Encadrée + vétérinaire",
+        "Refus + vétérinaire",
         "exit",
-        "Texte écrit à l'avance, vétérinaire proposé.",
+        "Quand : diagnostic demandé ou urgence.",
         None,
     ),
     "safe_fallback": (
-        "Réponse de repli",
+        "Réponse prudente",
         "exit",
-        "Après deux rejets ou une panne : texte prudent + vétérinaire.",
+        "Quand : panne ou deux réponses rejetées.",
         None,
     ),
     "finalize": (
-        "Sortie unique",
+        "Envoyer",
         "output",
-        "Toutes les réponses passent ici et sont enregistrées.",
+        "Sortie unique : ajoute l'alerte d'urgence si besoin et enregistre l'audit.",
         None,
     ),
     "__end__": ("Fin", "terminal", "La réponse part vers dialog.", None),
     "core_api": ("Core API", "tool", "Profil, collier et alertes du chien (lecture seule).", None),
 }
+
+ACTORS: dict[str, Actor] = {
+    "redact": "rule",
+    "circuit_breaker": "ai",
+    "query_understanding": "ai",
+    "gate": "rule",
+    "retrieval": "search",
+    "relevance_filter": "search",
+    "generation": "ai",
+    "guardrail": "ai",
+    "safe_response": "text",
+    "safe_response_escalate": "text",
+    "safe_fallback": "text",
+    "finalize": "rule",
+    "collect": "data",
+    "timeline": "rule",
+    "synthesize": "rule",
+    "verify": "rule",
+    "core_api": "data",
+}
+"""Qui fait le travail, pour la console : l'IA, une règle écrite, la recherche, un texte fixe."""
 
 EDGE_LABELS: dict[tuple[str, str], str] = {
     ("redact", "circuit_breaker"): "en parallèle",
@@ -120,7 +153,7 @@ HANDOFF_META: dict[str, tuple[str, NodeKind, str, int | None]] = {
         "Chaque élément doit avoir une source ; aucun langage diagnostique.",
         4,
     ),
-    "finalize": ("Sortie unique", "output", "Audit écrit, dossier JSON émis.", None),
+    "finalize": ("Envoyer", "output", "Sortie unique : audit écrit, dossier JSON émis.", None),
     "__end__": ("Fin", "terminal", "Le dossier part vers dialog, puis File & Export.", None),
     "core_api": ("Core API", "tool", "Profil, collier et alertes du chien (lecture seule).", None),
 }
@@ -152,10 +185,11 @@ def _from_graph(
                 role=role,
                 step=step,
                 on_error=policy[1] if policy else None,
+                actor=ACTORS.get(node_id),
             )
         )
     label, kind, role, _ = meta["core_api"]
-    nodes.append(NodeMeta(id="core_api", label=label, kind=kind, role=role))
+    nodes.append(NodeMeta(id="core_api", label=label, kind=kind, role=role, actor="data"))
     edges = [
         EdgeMeta(
             source=e.source,

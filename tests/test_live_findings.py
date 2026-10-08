@@ -148,3 +148,25 @@ def test_a_toxic_word_is_urgent_only_when_ingested(message: str, urgent: bool) -
 
     ctx = GuardrailContext(user_message=message, chunks=[], pet=None, alert=None)
     assert (escalation_rules(ctx).urgency == "high") is urgent
+
+
+@pytest.mark.parametrize(
+    ("claim", "grounded"),
+    [
+        ("Vous dites que Rex dort beaucoup depuis quelques jours.", True),
+        ("Vous indiquez qu'il dort beaucoup.", True),
+        ("Rex dort beaucoup parce qu'il est malade.", False),
+        ("Vous dites qu'il a probablement une infection.", False),
+    ],
+)
+async def test_restating_the_owner_needs_no_cited_source(claim: str, grounded: bool) -> None:
+    """Console, 2026-10-08 : la reprise du message, rédigée sans source, menait au repli (esc-009)."""
+    from pawrise_assistant.llm.components import GuardrailOut, LLMGuardrail
+
+    msg = "Rex dort beaucoup depuis quelques jours, c'est normal ?"
+    ctx = GuardrailContext(user_message=msg, chunks=[], pet=None, alert=None)
+    draft = DraftAnswer(response_text=claim, claims=[Claim(text=claim)])
+    assert (await RuleGuardrail().check(draft, ctx)).passed is grounded
+    # Le LLM ne peut pas annuler une reprise fidèle du message.
+    p = ScriptedProvider({"GuardrailOut": [GuardrailOut(checks=[])]})
+    assert (await LLMGuardrail(p).check(draft, ctx)).passed is grounded

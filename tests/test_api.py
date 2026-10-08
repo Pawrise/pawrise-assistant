@@ -226,3 +226,18 @@ def test_a_second_draft_has_its_own_waiting_line(client: TestClient) -> None:
         {"user_message": "Il boite depuis hier", "faults": ["draft_diagnostic"]},
     )
     assert RETRY in [e["user_status"] for e in events if e["type"] == "node_started"]
+
+
+def test_console_info_and_scenarios_say_what_to_expect(client: TestClient) -> None:
+    info = client.get("/debug/info").json()
+    assert info["ai"] is False
+    assert {p["name"] for p in info["pets"]} == {"Rex", "Nala"}
+    for s in client.get("/debug/scenarios").json():
+        assert s["expect"]
+
+
+def test_every_drawn_step_says_who_does_it(client: TestClient) -> None:
+    for name in ("turn", "handoff"):
+        topo = client.get(f"/graph?name={name}").json()
+        steps = [n for n in topo["nodes"] if n["kind"] not in ("terminal",)]
+        assert all(n["actor"] for n in steps), [n["id"] for n in steps if not n["actor"]]

@@ -15,7 +15,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from pawrise_assistant.components.generation import apply_faults
-from pawrise_assistant.components.guardrail import GuardrailContext, RuleGuardrail, is_vet_referral
+from pawrise_assistant.components.guardrail import (
+    GuardrailContext,
+    RuleGuardrail,
+    is_vet_referral,
+    restates_message,
+)
 from pawrise_assistant.components.intent import IntentResult, RuleIntentClassifier
 from pawrise_assistant.components.understanding import RuleQueryUnderstanding, Understanding
 from pawrise_assistant.domain.models import (
@@ -221,7 +226,11 @@ class LLMGuardrail:
             ClaimCheck(
                 text=r.text,
                 grounded=r.grounded
-                and ((i in llm and llm[i].supported) or is_vet_referral(r.text)),
+                and (
+                    (i in llm and llm[i].supported)
+                    or is_vet_referral(r.text)
+                    or restates_message(r.text, ctx.user_message)
+                ),
                 diagnostic=r.diagnostic or (i in llm and llm[i].diagnostic),
                 source_ids=r.source_ids,
             )

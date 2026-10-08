@@ -441,7 +441,7 @@ Recherche : BM25 top-20 ∥ dense top-20 → fusion RRF → top-20 → reranker 
 | Reranker | Cohere Rerank 3.5 multilingue | ADR-003 |
 | LLM | Interface `LLMProvider` — OpenAI (Azure écarté le 2026-10-08) | ADR-002 |
 | Observabilité | OpenTelemetry + **Langfuse self-hosté** | **pas LangSmith** — hébergement US, contradiction frontale avec la thèse data residency |
-| Console | Vite + React 19 + `@xyflow/react` + `elkjs` + shadcn/ui | §8 — graphe vivant, chronologie, inspecteur |
+| Console | Vite + React 19 + Tailwind, graphe en grille CSS + SVG | §8 — Discuter, Parcours, Tester |
 | Tests | pytest + pytest-asyncio | — |
 | Qualité | ruff, mypy strict | — |
 | CI | GitHub Actions | Couverture ≥ 80 % global, **≥ 90 % sur les nœuds 1 et 6** — aligné sur l'engagement de soutenance |
@@ -482,19 +482,26 @@ que le corpus d'amorce est en place (fin du lot 4).
 à l'assistant, sans `dialog`. Elle sert au debug, à la démo de soutenance et, plus tard, à la revue
 clinique.
 
-### 8.1 L'écran
+### 8.1 Trois vues indépendantes
 
-| Zone | Ce qu'elle montre |
-|---|---|
-| Graphe | Le graphe **complet** (6 nœuds, 3 sorties cadrées, `finalize`, tools). En direct : nœud en cours qui pulse, arête empruntée tracée, compteur ×2 sur un nœud repassé. En fin de tour, les nœuds jamais démarrés passent « non appelé » |
-| Chronologie | Une barre par passage de nœud. Un curseur rejoue le tour pas à pas sur le graphe ; clic sur une barre = aller à la fin de ce passage |
-| Inspecteur | Le nœud sélectionné : chaque passage, sa durée, ce qu'il a écrit dans le state, ses scores (chunks, rerank, verdict claim par claim), son coût |
-| Réponse | N'apparaît qu'après `finalize` : on voit que rien ne sort avant le guardrail |
+**Refonte du 2026-10-08**, après un retour d'usage : la première version (graphe ELK, chronologie à
+deux lignes, inspecteur et réponse sur un seul écran) était illisible pour un PO, et inutilisable
+sur téléphone.
 
-États d'un nœud : en attente · en cours · fait · redirigé/rejeté · non appelé. Toujours couleur +
-symbole + mot.
+| Vue | Pour qui, pour quoi | Ce qu'elle montre |
+|---|---|---|
+| **Discuter** | voir le produit comme le propriétaire | Fil de discussion, phrases d'attente du flux SSE (`/v1/turns/stream`), réponse vérifiée, sources repliables, bouton vétérinaire, dossier vétérinaire dans le fil. Chaque réponse mène à son parcours |
+| **Parcours** | comprendre qui fait quoi, et pourquoi | Le graphe complet sur une grille fixe : le chemin principal en colonne, les deux branches parallèles sur la même rangée (« En même temps »), les textes fixes regroupés à droite. Chaque étape dit qui la fait (IA, règle, recherche, texte fixe). Le chemin pris en noir, le reste estompé. Une barre de lecture rejoue le tour ; une étape touchée ouvre son détail |
+| **Tester** | vérifier sans lire de code | Les scénarios avec leur résultat attendu en clair, « Tout lancer », conforme ou différent. Un message libre avec pannes simulées, chacune avec son effet attendu |
 
-Maquette : https://claude.ai/artifact/EYEkHEbeUdJk5vyNH2dyng (page « 4 expériences », option D).
+Navigation : onglets en haut à partir de la tablette, barre d'onglets en bas sur téléphone. Le
+détail d'une étape s'ouvre à droite sur grand écran, en panneau par-dessus sur tablette et en
+feuille du bas sur téléphone.
+
+États d'une étape : en attente · en cours · faite · a changé la suite · rejetée ou en panne · pas
+appelée. Toujours couleur + symbole + mot. Les libellés de condition sont dans les étapes cibles
+(« Quand : diagnostic demandé ou urgence ») plutôt que sur les arêtes ; seuls « rien à chercher » et
+« 2ᵉ essai » restent sur leur rail.
 
 ### 8.2 Écartées
 
@@ -506,7 +513,8 @@ Maquette : https://claude.ai/artifact/EYEkHEbeUdJk5vyNH2dyng (page « 4 expérie
 ### 8.3 Contrat
 
 - `GET /graph` : topologie issue de `graph.get_graph()` (nœuds, arêtes, libellé des conditions).
-  La console ne dessine jamais un graphe à la main. Positions calculées une fois (ELK) puis figées.
+  Nœuds et arêtes viennent toujours du graphe compilé ; la console ne décide que leur rangement
+  sur la grille (`console/src/flow/layout.ts`). Un nœud inconnu se range à la suite.
 - `POST /debug/runs` → flux SSE, schéma Pydantic exporté en JSON Schema puis Zod :
   `run_started` · `node_started {node, attempt}` · `node_finished {node, attempt, duration_ms,
   status, summary, data, recovered_to}` · `run_error` · `run_finished {response | summary}`. Noms
@@ -528,8 +536,9 @@ reste sans état (§1.3).
 ### 8.5 Technique
 
 **Remplace la décision « page sans build ».** Un graphe animé, une chronologie et un inspecteur ne
-tiennent pas sans composants. Dossier `console/` : Vite + React 19 + TypeScript, `@xyflow/react` 12 +
-`elkjs`, shadcn/ui pour les panneaux. Pas de SDK d'agent (`useStream` suppose l'Agent Server,
+tiennent pas sans composants. Dossier `console/` : Vite + React 19 + TypeScript, Tailwind, icônes
+Lucide. Le graphe est en HTML (grille CSS) avec un calque SVG pour les arêtes, mesurées sur la
+position réelle des cartes : il reste juste à toute largeur, sans bibliothèque de graphe. Pas de SDK d'agent (`useStream` suppose l'Agent Server,
 `useChat` pense en messages, pas en nœuds).
 
 **Livré en deux temps** (§10) : graphe vivant au lot 2, chronologie + inspecteur complet au lot 6.
