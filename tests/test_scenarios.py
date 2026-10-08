@@ -94,7 +94,10 @@ async def test_toxic_ingestion_is_escalated_first(run: Any) -> None:
     r = out["response"]
     assert r.escalation.urgency == "high"
     assert r.response_text.startswith("Contactez un vétérinaire")
-    assert any(c.source_id.startswith("toxiques-courants") for c in r.citations)
+    # Texte fixe immédiat : ni recherche ni rédaction (4ᵉ passage réel : 11 à 14 s de rédaction
+    # rejetée avant le repli).
+    assert r.metadata.template_id == "SR-URG-01"
+    assert r.metadata.path == [*HEAD, "safe_response_escalate", "finalize"]
 
 
 @pytest.mark.parametrize(

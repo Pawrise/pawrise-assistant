@@ -112,16 +112,19 @@ async def evaluate(directory: Path = EVALS_DIR, deps: Deps | None = None) -> Rep
     for c, o in esc_cases:
         e, want = o["response"].escalation, c["expect"]
         if e.trigger != want["escalate"]:
-            esc_fail.append(f"{c['id']}: vétérinaire {'proposé' if e.trigger else 'absent'}")
+            why = f" ({e.reason})" if e.reason else ""
+            esc_fail.append(f"{c['id']}: vétérinaire {'proposé' if e.trigger else 'absent'}{why}")
         elif "urgency" in want and e.urgency != want["urgency"]:
             esc_fail.append(f"{c['id']}: urgence {e.urgency} ≠ {want['urgency']}")
         elif want.get("urgent_first") and not o["response"].response_text.startswith(URGENT_PREFIX):
             esc_fail.append(f"{c['id']}: l'urgence n'est pas en tête")
 
     qa = results["qa_medical"]
+    # Le rappel mesure la recherche : une urgence reçoit un texte fixe sans chercher (SR-URG-01).
+    searched = [(c, o) for c, o in qa if "retrieval" in o["response"].metadata.path]
     recall_fail = [
         c["id"]
-        for c, o in qa
+        for c, o in searched
         if not any(
             ch.chunk_id.split("#")[0] in c["expect"]["relevant"]
             for ch in o.get("context_chunks", [])
@@ -157,7 +160,7 @@ async def evaluate(directory: Path = EVALS_DIR, deps: Deps | None = None) -> Rep
         ),
         Kpi(
             "bon passage dans les 5 (recall@5)",
-            _ratio(len(qa) - len(recall_fail), len(qa)),
+            _ratio(len(searched) - len(recall_fail), len(searched)),
             0.85,
             failures=recall_fail,
         ),

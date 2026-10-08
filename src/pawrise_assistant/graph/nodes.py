@@ -16,9 +16,14 @@ from typing import Any
 
 from langgraph.runtime import Runtime
 
-from pawrise_assistant.components.guardrail import GuardrailContext, escalation_rules
+from pawrise_assistant.components.guardrail import GuardrailContext, escalation_rules, is_urgent
 from pawrise_assistant.components.pii import redact as redact_pii
-from pawrise_assistant.components.safe_responses import FALLBACK, SAFE_RESPONSES, URGENT_PREFIX
+from pawrise_assistant.components.safe_responses import (
+    FALLBACK,
+    SAFE_RESPONSES,
+    URGENT,
+    URGENT_PREFIX,
+)
 from pawrise_assistant.domain.models import (
     TELEMETRY_SOURCE,
     Alert,
@@ -290,7 +295,7 @@ async def safe_response(state: AssistantState) -> Update:
 
 
 async def safe_response_escalate(state: AssistantState) -> Update:
-    tpl = SAFE_RESPONSES["diagnosis_request"]
+    tpl = URGENT if is_urgent(state["user_message"]) else SAFE_RESPONSES["diagnosis_request"]
     return {
         "template_id": tpl.template_id,
         "trace": _trace(
@@ -339,7 +344,9 @@ async def finalize(state: AssistantState, runtime: Runtime[Deps]) -> Update:
     deps = runtime.context
     template_id = state.get("template_id")
     if template_id:
-        tpl = next(t for t in [*SAFE_RESPONSES.values(), FALLBACK] if t.template_id == template_id)
+        tpl = next(
+            t for t in [*SAFE_RESPONSES.values(), FALLBACK, URGENT] if t.template_id == template_id
+        )
         text, escalation, citations = tpl.text, tpl.escalation, []
     else:
         verdict = state["verdict"]

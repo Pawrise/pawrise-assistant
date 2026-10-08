@@ -136,6 +136,12 @@ LLM principal. Sortie = Safe Response cadrée + `escalation.trigger=true` + log 
 Le point important : **le LLM principal ne voit jamais la question.** On ne lui demande pas de
 résister à la tentation, on ne la lui présente pas.
 
+**Variante urgence.** Un signal d'urgence dans le message (toxique ingéré, détresse respiratoire,
+convulsions…) emprunte la même sortie, avec un texte fixe d'urgence (SR-URG-01) et
+`urgency=high`, **quel que soit le tri**. Règle déterministe, aucun LLM : constaté en réel, rédiger
+une réponse à « il a avalé un raisin » échouait deux fois au guardrail et coûtait 11 à 14 s avant le
+repli. En urgence, une consigne immédiate et relue vaut mieux qu'une réponse rédigée.
+
 ### Flux D — Abus, jailbreak, hors-scope
 
 **Pourquoi :** protection du système et du budget. Un jailbreak réussi sur un produit santé, c'est
@@ -262,7 +268,8 @@ LangGraph porte ça nativement — `RetryPolicy` et `error_handler` se déclaren
 START → redact ─┬→ circuit_breaker ─────┐
                 └→ query_understanding ─┴→ gate        (en parallèle, jonction)
 
-gate ─ tri en panne ──────────────────→ safe_fallback
+gate ─ signal d'urgence (R-ESC-01) ───→ safe_response_escalate  (SR-URG-01, avant tout le reste)
+     ─ tri en panne ──────────────────→ safe_fallback
      ─ diagnosis_request ─────────────→ safe_response_escalate
      ─ abuse|jailbreak|out_of_scope ──→ safe_response
      ─ clean & needs_retrieval ───────→ retrieval

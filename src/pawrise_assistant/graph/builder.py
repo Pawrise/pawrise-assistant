@@ -24,6 +24,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
+from pawrise_assistant.components.guardrail import is_urgent
 from pawrise_assistant.domain.models import NodeStatus, NodeTrace
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph import nodes
@@ -56,6 +57,8 @@ def route_gate(
     state: AssistantState,
 ) -> Literal["retrieval", "generation", "safe_response", "safe_response_escalate", "safe_fallback"]:
     """Le tri décide ; la reformulation ne sert que si le message est à traiter."""
+    if is_urgent(state["user_message"]):
+        return "safe_response_escalate"  # urgence : texte fixe immédiat, quel que soit le tri
     if state.get("classifier_failed") or "intent" not in state:
         return "safe_fallback"  # tri en panne : on échoue fermé
     intent = state["intent"]

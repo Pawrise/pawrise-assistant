@@ -99,7 +99,7 @@ EDGE_LABELS: dict[tuple[str, str], str] = {
     ("redact", "circuit_breaker"): "en parallèle",
     ("redact", "query_understanding"): "en parallèle",
     ("gate", "safe_response"): "abus · détournement · hors sujet",
-    ("gate", "safe_response_escalate"): "diagnostic",
+    ("gate", "safe_response_escalate"): "diagnostic ou urgence",
     ("gate", "safe_fallback"): "tri en panne",
     ("gate", "retrieval"): "recherche utile",
     ("gate", "generation"): "rien à chercher",

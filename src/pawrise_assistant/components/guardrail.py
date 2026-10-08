@@ -77,6 +77,11 @@ def is_diagnostic(text: str) -> bool:
     return any(re.search(p, t) for p in _DIAGNOSTIC)
 
 
+def is_urgent(message: str) -> bool:
+    """R-ESC-01 seule : un signal d'urgence dans le message, sans contexte ni LLM."""
+    return URGENT_SIGNALS.search(fold(message).replace("'", " ").replace("’", " ")) is not None
+
+
 def escalation_rules(ctx: GuardrailContext) -> Escalation:
     """Règles d'escalade explicites. Ordre : la plus urgente gagne."""
     message = fold(ctx.user_message).replace("'", " ").replace("’", " ")

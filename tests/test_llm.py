@@ -226,7 +226,7 @@ async def test_urgency_wins_even_when_the_classifier_redirects() -> None:
     )
     out = await build_graph().ainvoke(initial_state(req), context=deps.for_run())
     r = out["response"]
-    assert r.metadata.template_id == "SR-DIAG-01"
+    assert r.metadata.template_id == "SR-URG-01"
     assert r.escalation.urgency == "high"
     assert r.response_text.startswith("Contactez un vétérinaire dès maintenant")
 

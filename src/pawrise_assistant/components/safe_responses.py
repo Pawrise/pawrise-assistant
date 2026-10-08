@@ -48,4 +48,14 @@ FALLBACK = SafeTemplate(
     Escalation(trigger=True, urgency="medium", reason="réponse non validée par le guardrail"),
 )
 
+URGENT = SafeTemplate(
+    "SR-URG-01",
+    "Même s'il semble aller bien, n'attendez pas que des signes apparaissent : certains effets "
+    "sont retardés. Si votre vétérinaire n'est pas joignable, appelez un service d'urgence "
+    "vétérinaire. Je peux préparer un dossier avec les données récentes de votre chien.",
+    Escalation(trigger=True, urgency="high", reason="R-ESC-01 signal d'urgence"),
+)
+"""Urgence : texte fixe et immédiat, sans rédaction. Constaté en réel : la rédaction d'une
+réponse à « il a avalé un raisin » échouait deux fois au guardrail (11 à 14 s) avant le repli."""
+
 URGENT_PREFIX = "Contactez un vétérinaire dès maintenant. "

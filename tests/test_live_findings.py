@@ -109,7 +109,7 @@ async def test_an_urgent_signal_wins_even_off_topic() -> None:
     )
     out = await build_graph().ainvoke(initial_state(req), context=deps.for_run())
     r = out["response"]
-    assert r.metadata.template_id == "SR-OOS-01"
+    assert r.metadata.template_id == "SR-URG-01"
     assert r.escalation.urgency == "high"
     assert r.response_text.startswith("Contactez un vétérinaire dès maintenant")
 
