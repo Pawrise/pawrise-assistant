@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Protocol
 
 from pawrise_assistant.components.text import fold
 from pawrise_assistant.domain.models import (
@@ -84,6 +85,12 @@ def escalation_rules(ctx: GuardrailContext) -> Escalation:
             reason="R-ESC-03 baisse d'activité ≥ 30 % pendant ≥ 5 jours",
         )
     return Escalation()
+
+
+class Guardrail(Protocol):
+    name: str
+
+    async def check(self, draft: DraftAnswer, ctx: GuardrailContext) -> GuardrailVerdict: ...
 
 
 class RuleGuardrail:

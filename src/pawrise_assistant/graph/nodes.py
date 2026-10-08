@@ -9,8 +9,9 @@ La trace est la seule instrumentation : l'audit et la console la lisent toutes l
 from __future__ import annotations
 
 import asyncio
+import functools
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langgraph.runtime import Runtime
@@ -33,6 +34,7 @@ from pawrise_assistant.domain.models import (
 )
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.deps import Deps
+from pawrise_assistant.llm.provider import summarize, usage_scope
 
 Update = dict[str, Any]
 
@@ -353,3 +355,24 @@ async def finalize(state: AssistantState, runtime: Runtime[Deps]) -> Update:
         "response": response,
         "trace": _trace("finalize", "ok", "Audit écrit, réponse émise", path=path),
     }
+
+
+def metered(node: Callable[[AssistantState, Runtime[Deps]], Awaitable[Update]]) -> Any:
+    """Ajoute à la trace du nœud les appels LLM qu'il a faits : modèles, tokens, coût."""
+
+    @functools.wraps(node)
+    async def wrapper(state: AssistantState, runtime: Runtime[Deps]) -> Update:
+        with usage_scope() as used:
+            update = await node(state, runtime)
+        if used and update.get("trace"):
+            last: NodeTrace = update["trace"][-1]
+            usage = summarize(used)
+            update["trace"] = [
+                *update["trace"][:-1],
+                last.model_copy(
+                    update={"data": {**last.data, "llm": usage}, "cost_eur": usage["cost_eur"]}
+                ),
+            ]
+        return update
+
+    return wrapper

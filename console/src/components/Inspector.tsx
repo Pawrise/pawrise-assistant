@@ -241,6 +241,20 @@ function Details({ node, data }: { node: string; data: Data }) {
   }
 }
 
+type LlmUsageData = { models: string[]; tokens_in: number; tokens_out: number; cost_eur: number }
+
+function LlmUsage({ usage }: { usage: LlmUsageData }) {
+  return (
+    <p className="flex flex-wrap gap-x-3 text-xs text-violet-900">
+      <span className="font-mono">{usage.models.join(', ')}</span>
+      <span>
+        {usage.tokens_in} → {usage.tokens_out} tokens
+      </span>
+      <span>{usage.cost_eur.toFixed(4).replace('.', ',')} €</span>
+    </p>
+  )
+}
+
 /** Ce qu'on peut forcer depuis la console, par nœud (miroir de `graph/replay.py`). */
 const FORCE: Record<string, { label: string; overrides: Record<string, unknown> }[]> = {
   circuit_breaker: [
@@ -344,6 +358,7 @@ export function Inspector({
               </header>
               <div className="flex flex-col gap-2 px-3 py-2">
                 <p className="text-sm font-medium">{a.summary || '…'}</p>
+                {a.data.llm ? <LlmUsage usage={a.data.llm as LlmUsageData} /> : null}
                 {a.status ? <Details node={a.node} data={a.data} /> : null}
                 <details className="text-xs">
                   <summary className="cursor-pointer text-zinc-500">Données brutes</summary>

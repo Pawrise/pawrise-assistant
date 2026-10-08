@@ -33,7 +33,7 @@ from pawrise_assistant.core_api.client import HttpCoreApi
 from pawrise_assistant.domain.models import AlertContext, AssistantResponse, Turn, TurnRequest
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.builder import build_graph
-from pawrise_assistant.graph.deps import FAULTS, Deps, dev_deps
+from pawrise_assistant.graph.deps import FAULTS, Deps, dev_deps, llm_deps
 from pawrise_assistant.graph.replay import ReplayError, RunRegistry, debug_checkpointer, fork_config
 from pawrise_assistant.graph.topology import Topology, build_handoff_topology, build_topology
 from pawrise_assistant.handoff.graph import (
@@ -42,6 +42,7 @@ from pawrise_assistant.handoff.graph import (
     generate_handoff_summary,
 )
 from pawrise_assistant.handoff.models import HandoffRequest, HandoffSummary
+from pawrise_assistant.llm.provider import OpenAIProvider
 
 
 class DebugRunRequest(BaseModel):
@@ -68,7 +69,15 @@ def initial_state(req: TurnRequest) -> AssistantState:
 def create_app(settings: Settings | None = None, deps: Deps | None = None) -> FastAPI:
     settings = settings or Settings()
     if deps is None:
-        deps = dev_deps(audit=JsonlAuditSink(settings.audit_path), corpus_dir=settings.corpus_dir)
+        audit = JsonlAuditSink(settings.audit_path)
+        if settings.llm == "openai":
+            provider = OpenAIProvider.from_env(
+                {"nano": settings.llm_model_nano, "main": settings.llm_model_main},
+                base_url=settings.llm_base_url,
+            )
+            deps = llm_deps(provider, audit=audit, corpus_dir=settings.corpus_dir)
+        else:
+            deps = dev_deps(audit=audit, corpus_dir=settings.corpus_dir)
         if settings.core_api_url:
             from dataclasses import replace
 

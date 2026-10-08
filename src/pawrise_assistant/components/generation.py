@@ -20,10 +20,25 @@ from pawrise_assistant.domain.models import (
     DraftAnswer,
     PetContext,
 )
+from pawrise_assistant.llm.provider import LLMUnavailable
 
 
-class LLMUnavailable(RuntimeError):
-    pass
+def apply_faults(
+    claims: list[Claim], pet: PetContext | None, hardened: bool, faults: frozenset[str]
+) -> list[Claim]:
+    """Ajoute les claims fautifs demandés depuis la console (brouillon 1, puis brouillon durci)."""
+    out = list(claims)
+    if not hardened and "draft_diagnostic" in faults and pet and pet.profile:
+        p = pet.profile
+        out.append(
+            Claim(
+                text=f"Chez un {p.breed} de {p.age_years:g} ans, il s'agit "
+                "probablement d'une dysplasie de la hanche."
+            )
+        )
+    if hardened and "draft_ungrounded" in faults:
+        out.append(Claim(text="Le repos suffit généralement à résoudre ce type de problème."))
+    return out
 
 
 class Generator(Protocol):
@@ -91,18 +106,7 @@ class TemplateGenerator:
         claims.append(Claim(text=sentences(first.text)[0], source_ids=[first.chunk_id]))
         if pet and (tel := _telemetry_sentence(pet)):
             claims.append(tel)
-        if not hardened and "draft_diagnostic" in faults and pet and pet.profile:
-            p = pet.profile
-            claims.append(
-                Claim(
-                    text=f"Chez un {p.breed} de {p.age_years:g} ans, il s'agit "
-                    "probablement d'une dysplasie de la hanche."
-                )
-            )
-        if hardened and "draft_ungrounded" in faults:
-            claims.append(
-                Claim(text="Le repos suffit généralement à résoudre ce type de problème.")
-            )
+        claims = apply_faults(claims, pet, hardened, faults)
         if consult := _consult_sentence(chunks, skip=first.chunk_id):
             claims.append(consult)
         return DraftAnswer(response_text=" ".join(c.text for c in claims), claims=claims)

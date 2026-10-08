@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,3 +20,10 @@ class Settings(BaseSettings):
     core_api_url: str | None = None
     """None : Core API simulé en process."""
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    llm: Literal["rules", "openai"] = "rules"
+    """`rules` : composants déterministes, sans réseau. `openai` : OpenAI ou Azure OpenAI (v1)."""
+    llm_base_url: str | None = None
+    """Vide pour OpenAI ; l'URL de la ressource Azure OpenAI (`…/openai/v1/`) en cible EU."""
+    llm_model_nano: str = "gpt-5.4-nano"
+    llm_model_main: str = "gpt-5.4"

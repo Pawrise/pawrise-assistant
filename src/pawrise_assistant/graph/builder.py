@@ -22,6 +22,7 @@ from pawrise_assistant.domain.models import NodeStatus, NodeTrace
 from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph import nodes
 from pawrise_assistant.graph.deps import Deps
+from pawrise_assistant.graph.nodes import metered
 
 MAIN = [
     "circuit_breaker",
@@ -95,7 +96,7 @@ def build_graph(
 ) -> CompiledStateGraph[AssistantState, Deps, AssistantState, AssistantState]:
     g = StateGraph(AssistantState, context_schema=Deps)
     for name in MAIN:
-        g.add_node(name, getattr(nodes, name), error_handler=_handler(name))
+        g.add_node(name, metered(getattr(nodes, name)), error_handler=_handler(name))
     for name in EXITS:
         g.add_node(name, getattr(nodes, name))
     g.add_node("finalize", nodes.finalize)
