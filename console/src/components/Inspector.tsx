@@ -189,6 +189,45 @@ function Details({ node, data }: { node: string; data: Data }) {
         </div>
       )
     }
+    case 'collect': {
+      const tools = (data.tools as { tool: string; ok: boolean; error?: string }[]) ?? []
+      return (
+        <ul className="flex flex-col gap-0.5 text-[13px]">
+          {tools.map((t) => (
+            <li key={t.tool} className="flex gap-2">
+              <Tick ok={t.ok} />
+              <Mono>{t.tool}</Mono>
+              {t.error ? <span className="text-zinc-500">{t.error}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    case 'timeline': {
+      const events = (data.events as { days_ago: number; text: string; source: string }[]) ?? []
+      return (
+        <ol className="flex flex-col gap-1 text-[13px]">
+          {events.map((e, i) => (
+            <li key={i}>
+              <span className="font-medium">{e.days_ago ? `J-${e.days_ago}` : "Aujourd'hui"}</span>{' '}
+              {e.text} <Mono>{e.source}</Mono>
+            </li>
+          ))}
+        </ol>
+      )
+    }
+    case 'verify': {
+      const problems = (data.problems as string[]) ?? []
+      return problems.length ? (
+        <ul className="flex flex-col gap-1 text-[13px] text-red-800">
+          {problems.map((p) => (
+            <li key={p}>✕ {p}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[13px] text-emerald-800">✓ Tout est sourcé, aucun langage diagnostique.</p>
+      )
+    }
     default:
       return (
         <dl>

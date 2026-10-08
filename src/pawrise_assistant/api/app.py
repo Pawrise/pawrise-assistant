@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,7 +35,13 @@ from pawrise_assistant.domain.state import AssistantState
 from pawrise_assistant.graph.builder import build_graph
 from pawrise_assistant.graph.deps import FAULTS, Deps, dev_deps
 from pawrise_assistant.graph.replay import ReplayError, RunRegistry, debug_checkpointer, fork_config
-from pawrise_assistant.graph.topology import Topology, build_topology
+from pawrise_assistant.graph.topology import Topology, build_handoff_topology, build_topology
+from pawrise_assistant.handoff.graph import (
+    HandoffInvalid,
+    build_handoff_graph,
+    generate_handoff_summary,
+)
+from pawrise_assistant.handoff.models import HandoffRequest, HandoffSummary
 
 
 class DebugRunRequest(BaseModel):
@@ -68,7 +74,8 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
 
             deps = replace(deps, core_api=HttpCoreApi(settings.core_api_url))
     graph = build_graph()
-    topology = build_topology(graph)
+    handoff_graph = build_handoff_graph()
+    topologies = {"turn": build_topology(graph), "handoff": build_handoff_topology(handoff_graph)}
 
     app = FastAPI(title="Pawrise Assistant", version="0.1.0")
     app.add_middleware(
@@ -88,12 +95,37 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
         response: AssistantResponse = out["response"]
         return response
 
+    @app.post("/v1/handoff-summaries")
+    async def handoff_summaries(req: HandoffRequest) -> HandoffSummary:
+        try:
+            return await generate_handoff_summary(handoff_graph, req, deps.for_run())
+        except HandoffInvalid as e:
+            raise HTTPException(422, f"dossier non conforme : {e}") from e
+
     @app.get("/graph")
-    async def graph_topology() -> Topology:
-        return topology
+    async def graph_topology(name: Literal["turn", "handoff"] = "turn") -> Topology:
+        return topologies[name]
 
     if not settings.debug_api:
         return app
+
+    @app.post("/debug/handoff-runs")
+    async def debug_handoff(req: HandoffRequest) -> EventSourceResponse:
+        started = RunStarted(run_id=new_run_id(), input=req.model_dump(mode="json"))
+        mapper = EventMapper(run_id=started.run_id)
+
+        async def stream() -> AsyncIterator[dict[str, Any]]:
+            yield _sse(started)
+            parts = handoff_graph.astream(
+                {"request": req, "trace": []},
+                context=deps.for_run(),
+                stream_mode=["updates", "tasks"],
+                version="v2",
+            )
+            async for event in map_stream(parts, mapper):
+                yield _sse(event)
+
+        return EventSourceResponse(stream())
 
     @app.get("/debug/scenarios")
     async def scenarios() -> list[Scenario]:

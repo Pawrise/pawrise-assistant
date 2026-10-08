@@ -114,5 +114,35 @@ export type DebugEvent =
       data: Record<string, unknown>
       recovered_to: string | null
     }
-  | { type: 'run_finished'; ts_ms: number; response: AssistantResponse }
+  | {
+      type: 'run_finished'
+      ts_ms: number
+      response: AssistantResponse | null
+      summary: HandoffSummary | null
+    }
   | { type: 'run_error'; ts_ms: number; message: string }
+
+export interface Sourced {
+  text: string
+  source: string
+}
+
+export interface HandoffSummary {
+  schema_version: '1'
+  pet: { name: string; breed: string; age_years: number; weight_kg: number } | null
+  reason: string
+  urgency: 'low' | 'medium' | 'high'
+  timeline: (Sourced & { days_ago: number })[]
+  owner_reported: Sourced[]
+  observations: Sourced[]
+  disclaimer: string
+}
+
+export interface HandoffRequest {
+  thread_id: string
+  pet_ref: string
+  reason: string | null
+  thread_extracts: { role: 'owner' | 'assistant'; content: string }[]
+}
+
+export type GraphName = 'turn' | 'handoff'

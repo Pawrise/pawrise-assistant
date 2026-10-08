@@ -31,7 +31,7 @@ const F: DebugEvent[] = [
   start('guardrail', 2, 14), done('guardrail', 2, 16, 'rejected'),
   start('safe_fallback', 1, 16), done('safe_fallback', 1, 17),
   start('finalize', 1, 17), done('finalize', 1, 18),
-  { type: 'run_finished', ts_ms: 19, response: { metadata: { path: [] } } as never },
+  { type: 'run_finished', ts_ms: 19, response: { metadata: { path: [] } } as never, summary: null },
 ]
 
 describe('modèle de tour', () => {

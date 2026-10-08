@@ -1,4 +1,12 @@
-import type { DebugEvent, ForkRequest, RunRequest, Scenario, Topology } from './types'
+import type {
+  DebugEvent,
+  ForkRequest,
+  GraphName,
+  HandoffRequest,
+  RunRequest,
+  Scenario,
+  Topology,
+} from './types'
 
 async function getJson<T>(path: string): Promise<T> {
   const r = await fetch(path)
@@ -6,7 +14,8 @@ async function getJson<T>(path: string): Promise<T> {
   return (await r.json()) as T
 }
 
-export const fetchTopology = () => getJson<Topology>('/graph')
+export const fetchTopology = (name: GraphName = 'turn') =>
+  getJson<Topology>(`/graph?name=${name}`)
 export const fetchScenarios = () => getJson<Scenario[]>('/debug/scenarios')
 export const fetchFaults = () => getJson<string[]>('/debug/faults')
 
@@ -29,6 +38,15 @@ export function parseSseChunk(buffer: string): { events: string[]; rest: string 
 /** Lance un tour en mode debug et appelle `onEvent` pour chaque événement reçu. */
 export function runDebug(req: RunRequest, onEvent: (e: DebugEvent) => void, signal?: AbortSignal) {
   return stream('/debug/runs', req, onEvent, signal)
+}
+
+/** Prépare le dossier pré-consultation en mode debug. */
+export function runHandoff(
+  req: HandoffRequest,
+  onEvent: (e: DebugEvent) => void,
+  signal?: AbortSignal,
+) {
+  return stream('/debug/handoff-runs', req, onEvent, signal)
 }
 
 /** Rejoue un tour depuis un nœud : réexécuté, ou avec une sortie forcée. */

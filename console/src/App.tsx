@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from 'react'
-import { fetchFaults, fetchScenarios, fetchTopology, forkRun, runDebug } from '@/api/client'
-import type { Scenario, Topology, TopologyNode } from '@/api/types'
+import { fetchFaults, fetchScenarios, fetchTopology, forkRun, runDebug, runHandoff } from '@/api/client'
+import type { GraphName, HandoffRequest, Scenario, Topology, TopologyNode } from '@/api/types'
 import { AnswerPanel } from '@/components/AnswerPanel'
+import { HandoffPanel } from '@/components/HandoffPanel'
 import { Inspector, type ReplayActions } from '@/components/Inspector'
 import { Timeline } from '@/components/Timeline'
 import { Button } from '@/components/ui/button'
@@ -21,9 +22,17 @@ const FAULT_LABELS: Record<string, string> = {
   draft_ungrounded: 'brouillon sans source',
 }
 
+const GRAPHS: { id: GraphName; label: string; focus: string }[] = [
+  { id: 'turn', label: 'Tour de chat', focus: 'guardrail' },
+  { id: 'handoff', label: 'Dossier vétérinaire', focus: 'verify' },
+]
+
 export default function App() {
-  const [topology, setTopology] = useState<Topology | null>(null)
-  const [positions, setPositions] = useState<Positions>({})
+  const [graphName, setGraphName] = useState<GraphName>('turn')
+  const [graphs, setGraphs] = useState<Partial<Record<GraphName, { topology: Topology; positions: Positions }>>>({})
+  const topology = graphs[graphName]?.topology ?? null
+  const positions = graphs[graphName]?.positions ?? {}
+  const lastTurn = useRef<{ message: string; answer: string } | null>(null)
   const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [allFaults, setAllFaults] = useState<string[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -50,16 +59,40 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    Promise.all([fetchTopology(), fetchScenarios(), fetchFaults()])
-      .then(async ([t, s, f]) => {
-        setTopology(t)
-        setPositions(await layout(t))
+    Promise.all([fetchScenarios(), fetchFaults()])
+      .then(([s, f]) => {
         setScenarios(s)
         setAllFaults(f)
         if (s.length) pick(s[0])
       })
       .catch((e: Error) => setLoadError(e.message))
   }, [pick])
+
+  // Chaque graphe est chargé et disposé une seule fois, à la première ouverture.
+  useEffect(() => {
+    if (graphs[graphName]) return
+    fetchTopology(graphName)
+      .then(async (t) => {
+        const p = await layout(t)
+        setGraphs((g) => ({ ...g, [graphName]: { topology: t, positions: p } }))
+      })
+      .catch((e: Error) => setLoadError(e.message))
+  }, [graphName, graphs])
+
+  // On garde le dernier échange pour l'inclure dans le dossier vétérinaire.
+  useEffect(() => {
+    if (run.response && run.message) {
+      lastTurn.current = { message: run.message, answer: run.response.response_text }
+    }
+  }, [run.response, run.message])
+
+  const switchGraph = (name: GraphName) => {
+    abort.current?.abort()
+    dispatch({ type: 'reset' })
+    setGraphName(name)
+    setSelected(GRAPHS.find((g) => g.id === name)?.focus ?? null)
+    setCursor(0)
+  }
 
   const slots = useMemo(() => toSlots(run, stepByStep), [run, stepByStep])
   const total = totalOf(slots)
@@ -108,6 +141,21 @@ export default function App() {
     (e?: FormEvent) => {
       e?.preventDefault()
       if (!message.trim()) return
+      if (graphName === 'handoff') {
+        const prev = lastTurn.current
+        const extracts: HandoffRequest['thread_extracts'] = [{ role: 'owner', content: message }]
+        if (prev && prev.message === message) {
+          extracts.push({ role: 'assistant', content: prev.answer })
+        }
+        const req = {
+          thread_id: 'console',
+          pet_ref: scenario?.pet_ref ?? 'pet_demo_rex',
+          reason: null,
+          thread_extracts: extracts,
+        }
+        void play((signal) => runHandoff(req, dispatch, signal))
+        return
+      }
       const sameScenario = scenario?.user_message === message
       const req = {
         user_message: message,
@@ -117,7 +165,7 @@ export default function App() {
       }
       void play((signal) => runDebug(req, dispatch, signal))
     },
-    [message, scenario, faults, play],
+    [message, scenario, faults, play, graphName],
   )
 
   const replay = useMemo<ReplayActions | undefined>(() => {
@@ -156,7 +204,23 @@ export default function App() {
     <div className="flex h-screen flex-col bg-zinc-50 text-zinc-950">
       <header className="flex flex-wrap items-center gap-3 border-b bg-white px-5 py-3">
         <span className="font-semibold">Pawrise Assistant</span>
-        <span className="text-xs text-zinc-500">console · graphe vivant</span>
+        <div role="tablist" aria-label="Graphe" className="flex rounded-lg bg-zinc-100 p-0.5">
+          {GRAPHS.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              role="tab"
+              aria-selected={graphName === g.id}
+              onClick={() => switchGraph(g.id)}
+              className={cn(
+                'h-7 rounded-md px-3 text-[13px]',
+                graphName === g.id ? 'bg-white font-medium shadow-xs' : 'text-zinc-600',
+              )}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
         {run.forkOf ? (
           <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs text-violet-900">
             Rejoué depuis {meta[run.forkOf.node]?.label ?? run.forkOf.node}
@@ -210,7 +274,7 @@ export default function App() {
             Rejouer
           </Button>
         </form>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <div className={cn('flex flex-wrap items-center gap-1.5 text-xs', graphName !== 'turn' && 'hidden')}>
           <span className="text-zinc-500">Pannes :</span>
           {allFaults.map((f) => {
             const on = faults.includes(f)
@@ -251,9 +315,11 @@ export default function App() {
                 ? 'Prêt'
                 : run.phase === 'running'
                   ? 'En direct…'
-                  : `${run.phase === 'error' ? 'Erreur' : 'Tour terminé'} · ${fmtMs(
-                      run.response?.metadata.latency_ms ?? 0,
-                    )} côté serveur`}
+                  : run.phase === 'error'
+                    ? `Erreur : ${run.error}`
+                    : run.summary
+                      ? 'Dossier prêt'
+                      : `Tour terminé · ${fmtMs(run.response?.metadata.latency_ms ?? 0)} côté serveur`}
             </div>
           </div>
           <Timeline
@@ -284,15 +350,19 @@ export default function App() {
               meta={selected ? meta[selected] : undefined}
               snap={selected ? snap.nodes[selected] : undefined}
               attempts={selectedAttempts}
-              replay={replay}
+              replay={graphName === 'turn' ? replay : undefined}
               canReplay={run.phase === 'done' || run.phase === 'error'}
             />
           </div>
-          <div className="border-t p-5">
+          <div className="max-h-[45%] overflow-auto border-t p-5">
             <p className="mb-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">
-              Réponse envoyée
+              {graphName === 'turn' ? 'Réponse envoyée' : 'Dossier transmis'}
             </p>
-            <AnswerPanel response={run.response} visible={snap.ended} error={run.error} />
+            {graphName === 'handoff' && run.summary && snap.ended ? (
+              <HandoffPanel summary={run.summary} />
+            ) : (
+              <AnswerPanel response={run.response} visible={snap.ended} error={run.error} />
+            )}
           </div>
         </aside>
       </div>

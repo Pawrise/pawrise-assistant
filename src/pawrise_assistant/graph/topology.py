@@ -100,14 +100,41 @@ EDGE_LABELS: dict[tuple[str, str], str] = {
 }
 
 
-def build_topology(graph: Any) -> Topology:
+HANDOFF_META: dict[str, tuple[str, NodeKind, str, int | None]] = {
+    "__start__": ("Début", "terminal", "dialog demande le dossier au moment du handoff.", None),
+    "collect": ("Collecter", "step", "Profil, 7 jours de collier et alertes de la période.", 1),
+    "timeline": ("Chronologie", "step", "Range les événements par date. Aucun modèle ici.", 2),
+    "synthesize": ("Synthétiser", "step", "Motif, propos du propriétaire, urgence.", 3),
+    "verify": (
+        "Vérifier",
+        "step",
+        "Chaque élément doit avoir une source ; aucun langage diagnostique.",
+        4,
+    ),
+    "finalize": ("Sortie unique", "output", "Audit écrit, dossier JSON émis.", None),
+    "__end__": ("Fin", "terminal", "Le dossier part vers dialog, puis File & Export.", None),
+    "core_api": ("Core API", "tool", "Profil, collier et alertes du chien (lecture seule).", None),
+}
+
+
+def build_handoff_topology(graph: Any) -> Topology:
+    topo = _from_graph(graph, HANDOFF_META, on_error={})
+    topo.edges.append(EdgeMeta(source="collect", target="core_api", kind="tool", label="3 outils"))
+    return topo
+
+
+def _from_graph(
+    graph: Any,
+    meta: dict[str, tuple[str, NodeKind, str, int | None]],
+    on_error: dict[str, tuple[str, str, dict[str, Any]]],
+) -> Topology:
     drawn = graph.get_graph()
     nodes = []
     for node_id in drawn.nodes:
         if node_id.startswith("__error_handler__"):
             continue
-        label, kind, role, step = NODE_META[node_id]
-        on_error = ON_ERROR.get(node_id)
+        label, kind, role, step = meta[node_id]
+        policy = on_error.get(node_id)
         nodes.append(
             NodeMeta(
                 id=node_id,
@@ -115,24 +142,30 @@ def build_topology(graph: Any) -> Topology:
                 kind=kind,
                 role=role,
                 step=step,
-                on_error=on_error[1] if on_error else None,
+                on_error=policy[1] if policy else None,
             )
         )
-    label, kind, role, step = NODE_META["core_api"]
+    label, kind, role, _ = meta["core_api"]
     nodes.append(NodeMeta(id="core_api", label=label, kind=kind, role=role))
-
-    edges = []
-    for e in drawn.edges:
-        if e.source.startswith("__error_handler__") or e.target.startswith("__error_handler__"):
-            continue
-        edges.append(
-            EdgeMeta(
-                source=e.source,
-                target=e.target,
-                kind="conditional" if e.conditional else "normal",
-                label=EDGE_LABELS.get((e.source, e.target)),
-            )
+    edges = [
+        EdgeMeta(
+            source=e.source,
+            target=e.target,
+            kind="conditional" if e.conditional else "normal",
+            label=EDGE_LABELS.get((e.source, e.target)) if meta is NODE_META else None,
         )
+        for e in drawn.edges
+        if not (
+            e.source.startswith("__error_handler__") or e.target.startswith("__error_handler__")
+        )
+    ]
+    return Topology(nodes=nodes, edges=edges)
+
+
+def build_topology(graph: Any) -> Topology:
+    topo = _from_graph(graph, NODE_META, ON_ERROR)
+    nodes, edges = topo.nodes, topo.edges
+
     known = {(e.source, e.target) for e in edges}
     for node, (target, policy, _) in ON_ERROR.items():
         if (node, target) not in known:

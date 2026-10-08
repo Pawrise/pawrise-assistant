@@ -2,7 +2,7 @@
 // Tout est pur : la console calcule l'état du graphe à n'importe quel instant de la chronologie,
 // ce qui permet de rejouer le tour en déplaçant le curseur.
 
-import type { AssistantResponse, DebugEvent, NodeStatus } from '@/api/types'
+import type { AssistantResponse, DebugEvent, HandoffSummary, NodeStatus } from '@/api/types'
 
 export interface Attempt {
   node: string
@@ -21,28 +21,38 @@ export interface Attempt {
 export interface RunState {
   phase: 'idle' | 'running' | 'done' | 'error'
   runId: string | null
+  /** Le message du propriétaire, pour un tour de chat. */
+  message: string | null
   forkOf: { runId: string; node: string; attempt: number } | null
   attempts: Attempt[]
   response: AssistantResponse | null
+  summary: HandoffSummary | null
   error: string | null
 }
 
 export const emptyRun: RunState = {
   phase: 'idle',
   runId: null,
+  message: null,
   forkOf: null,
   attempts: [],
   response: null,
+  summary: null,
   error: null,
 }
 
-export function reduce(state: RunState, e: DebugEvent): RunState {
+export type RunAction = DebugEvent | { type: 'reset' }
+
+export function reduce(state: RunState, e: RunAction): RunState {
   switch (e.type) {
+    case 'reset':
+      return emptyRun
     case 'run_started':
       return {
         ...emptyRun,
         phase: 'running',
         runId: e.run_id,
+        message: e.input.user_message ?? null,
         forkOf:
           e.fork_of && e.from_node
             ? { runId: e.fork_of, node: e.from_node, attempt: e.from_attempt ?? 1 }
@@ -95,7 +105,7 @@ export function reduce(state: RunState, e: DebugEvent): RunState {
       return { ...state, attempts }
     }
     case 'run_finished':
-      return { ...state, phase: 'done', response: e.response }
+      return { ...state, phase: 'done', response: e.response, summary: e.summary }
     case 'run_error':
       return { ...state, phase: 'error', error: e.message }
   }
@@ -156,6 +166,9 @@ export interface Snapshot {
   ended: boolean
 }
 
+/** Les nœuds qui appellent le Core API, dans chacun des deux graphes. */
+const TOOL_CALLERS = new Set(['query_understanding', 'collect'])
+
 export const edgeId = (source: string, target: string) => `${source}->${target}`
 
 export function snapshot(run: RunState, s: Slot[], cursor: number, nodeIds: string[]): Snapshot {
@@ -180,10 +193,10 @@ export function snapshot(run: RunState, s: Slot[], cursor: number, nodeIds: stri
   }
 
   if (seen.length) nodes['__start__'] = { view: 'ok', count: 1, ms: 0 }
-  if (ended && run.response) nodes['__end__'] = { view: 'ok', count: 1, ms: 0 }
+  if (ended && (run.response || run.summary)) nodes['__end__'] = { view: 'ok', count: 1, ms: 0 }
 
   // Le Core API n'est pas un nœud du graphe : son état vient des outils appelés par le nœud 2.
-  const qu = seen.filter((x) => x.attempt.node === 'query_understanding').at(-1)
+  const qu = seen.filter((x) => TOOL_CALLERS.has(x.attempt.node)).at(-1)
   const tools = (qu?.attempt.data.tools as { ok: boolean }[] | undefined) ?? []
   if (qu && (cursor < qu.end || qu.attempt.status === null)) {
     nodes['core_api'] = { view: 'running', count: 0, ms: 0 }
@@ -205,7 +218,7 @@ export function snapshot(run: RunState, s: Slot[], cursor: number, nodeIds: stri
     taken.add(id)
     if (cursor < seen[i].end) active = id
   }
-  if (qu && tools.length) taken.add(edgeId('query_understanding', 'core_api'))
-  if (ended && run.response) taken.add(edgeId('finalize', '__end__'))
+  if (qu && tools.length) taken.add(edgeId(qu.attempt.node, 'core_api'))
+  if (ended && (run.response || run.summary)) taken.add(edgeId('finalize', '__end__'))
   return { nodes, taken, active, ended }
 }

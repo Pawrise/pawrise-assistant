@@ -18,6 +18,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field
 
 from pawrise_assistant.domain.models import AssistantResponse, NodeTrace
+from pawrise_assistant.handoff.models import HandoffSummary
 
 ERROR_HANDLER_PREFIX = "__error_handler__"
 
@@ -82,7 +83,10 @@ class NodeFinished(BaseModel):
 class RunFinished(BaseModel):
     type: Literal["run_finished"] = "run_finished"
     ts_ms: int
-    response: AssistantResponse
+    response: AssistantResponse | None = None
+    """Graphe de conversation."""
+    summary: HandoffSummary | None = None
+    """Graphe du dossier pré-consultation."""
 
 
 class RunError(BaseModel):
@@ -107,6 +111,7 @@ class EventMapper:
         self.started: dict[str, tuple[str, int, int]] = {}  # task id → (node, attempt, ts)
         self.failed: dict[str, NodeFinished] = {}  # nœud → fin en erreur, en attente du handler
         self.final: RunFinished | None = None
+        self.summary: HandoffSummary | None = None
 
     def now(self) -> int:
         return round((time.perf_counter() - self.t0) * 1000)
@@ -114,8 +119,14 @@ class EventMapper:
     def map(self, part: dict[str, Any]) -> list[BaseModel]:
         if part["type"] == "updates":
             for node, update in (part["data"] or {}).items():
-                if node == "finalize" and isinstance(update, dict) and "response" in update:
+                if not isinstance(update, dict):
+                    continue
+                if node == "finalize" and "response" in update:
                     self.final = RunFinished(ts_ms=self.now(), response=update["response"])
+                elif node == "synthesize" and "summary" in update:
+                    self.summary = update["summary"]
+                elif node == "finalize" and self.summary is not None:
+                    self.final = RunFinished(ts_ms=self.now(), summary=self.summary)
             return []
         if part["type"] != "tasks":
             return []
@@ -187,4 +198,6 @@ async def map_stream(parts: AsyncIterator[Any], mapper: EventMapper) -> AsyncIte
         else:
             yield RunError(ts_ms=mapper.now(), message="tour terminé sans réponse")
     except Exception as e:  # le flux de debug ne casse jamais sans le dire
-        yield RunError(ts_ms=mapper.now(), message=repr(e))
+        for failed in mapper.failed.values():  # nœuds tombés sans error_handler
+            yield failed
+        yield RunError(ts_ms=mapper.now(), message=str(e) or repr(e))

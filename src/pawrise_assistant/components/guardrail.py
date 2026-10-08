@@ -37,7 +37,7 @@ _DIAGNOSTIC = [
     r"\b\d+([.,]\d+)?\s?(mg|ml|comprimes?|gelules?)\b",
 ]
 
-_URGENT = re.compile(
+URGENT_SIGNALS = re.compile(
     r"\b(chocolat|raisins?|xylitol|oignons?|mort aux rats|antigel|poison|toxique|empoisonn|"
     r"ne respire|respire mal|du mal a respirer|convuls|s est effondre|effondrement|"
     r"ventre gonfle|saigne beaucoup|hemorragie|inconscient)"
@@ -60,7 +60,7 @@ def is_diagnostic(text: str) -> bool:
 def escalation_rules(ctx: GuardrailContext) -> Escalation:
     """Règles d'escalade explicites. Ordre : la plus urgente gagne."""
     message = fold(ctx.user_message).replace("'", " ").replace("’", " ")
-    if hit := _URGENT.search(message):
+    if hit := URGENT_SIGNALS.search(message):
         return Escalation(
             trigger=True, urgency="high", reason=f"R-ESC-01 signal d'urgence (« {hit.group(0)} »)"
         )
