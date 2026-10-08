@@ -13,13 +13,23 @@ export function AnswerPanel({
   response,
   visible,
   error,
+  waiting,
 }: {
   response: AssistantResponse | null
   visible: boolean
   error: string | null
+  /** La phrase d'attente que lit le propriétaire, reçue en SSE (`/v1/turns/stream`). */
+  waiting: string | null
 }) {
   if (error) {
     return <p className="text-sm text-red-700">Le tour a échoué : {error}</p>
+  }
+  if (waiting && !visible) {
+    return (
+      <p key={waiting} className="shimmer animate-in fade-in text-[14px] duration-300">
+        {waiting}
+      </p>
+    )
   }
   if (!response || !visible) {
     return (

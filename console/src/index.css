@@ -128,3 +128,19 @@
     @apply font-sans;
     }
 }
+/* Phrase d'attente du propriétaire : un reflet qui passe sur le texte, comme les assistants LLM. */
+.shimmer {
+  background: linear-gradient(90deg, var(--color-zinc-400) 0%, var(--color-zinc-900) 50%, var(--color-zinc-400) 100%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; color: var(--color-zinc-600); background: none; }
+}

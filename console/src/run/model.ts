@@ -16,6 +16,8 @@ export interface Attempt {
   recoveredTo: string | null
   /** Passage repris tel quel du tour d'origine (fork), pas réexécuté. */
   reused: boolean
+  /** Phrase d'attente montrée au propriétaire pendant ce passage. */
+  userStatus: string | null
 }
 
 export interface RunState {
@@ -68,6 +70,7 @@ export function reduce(state: RunState, e: RunAction): RunState {
           data: r.data,
           recoveredTo: null,
           reused: true,
+          userStatus: null,
         })),
       }
     case 'node_started':
@@ -86,6 +89,7 @@ export function reduce(state: RunState, e: RunAction): RunState {
             data: {},
             recoveredTo: null,
             reused: false,
+            userStatus: e.user_status ?? null,
           },
         ],
       }
@@ -178,6 +182,8 @@ export interface Snapshot {
   taken: Set<string>
   active: string | null
   ended: boolean
+  /** Ce que lit le propriétaire à cet instant, tant que la réponse n'est pas partie. */
+  waiting: string | null
 }
 
 /** Les nœuds qui appellent le Core API, dans chacun des deux graphes. */
@@ -281,5 +287,6 @@ export function snapshot(
   }
   if (qu && tools.length) taken.add(edgeId(qu.attempt.node, 'core_api'))
   if (ended && (run.response || run.summary)) taken.add(edgeId('finalize', '__end__'))
-  return { nodes, taken, active, ended }
+  const waiting = ended ? null : (seen.findLast((x) => x.attempt.userStatus)?.attempt.userStatus ?? null)
+  return { nodes, taken, active, ended, waiting }
 }

@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
+from pawrise_assistant.api.status import user_status
 from pawrise_assistant.domain.models import AssistantResponse, NodeTrace
 from pawrise_assistant.handoff.models import HandoffSummary
 
@@ -65,6 +66,8 @@ class NodeStarted(BaseModel):
     node: str
     attempt: int
     ts_ms: int
+    user_status: str | None = None
+    """La phrase d'attente montrée au propriétaire à cette étape (`api/status.py`)."""
 
 
 class NodeFinished(BaseModel):
@@ -137,7 +140,15 @@ class EventMapper:
                 return []
             self.attempts[name] += 1
             self.started[data["id"]] = (name, self.attempts[name], self.now())
-            return [NodeStarted(node=name, attempt=self.attempts[name], ts_ms=self.now())]
+            attempt = self.attempts[name]
+            return [
+                NodeStarted(
+                    node=name,
+                    attempt=attempt,
+                    ts_ms=self.now(),
+                    user_status=user_status(name, attempt),
+                )
+            ]
 
         # fin de tâche
         if name.startswith(ERROR_HANDLER_PREFIX):
@@ -201,3 +212,37 @@ async def map_stream(parts: AsyncIterator[Any], mapper: EventMapper) -> AsyncIte
         for failed in mapper.failed.values():  # nœuds tombés sans error_handler
             yield failed
         yield RunError(ts_ms=mapper.now(), message=str(e) or repr(e))
+
+
+# — Flux de prod (POST /v1/turns/stream) —
+# Contrat minimal pour dialog : des phrases d'attente, puis la réponse vérifiée. Ni nom de nœud,
+# ni brouillon, ni score interne.
+
+
+class TurnStatus(BaseModel):
+    type: Literal["status"] = "status"
+    text: str
+
+
+class TurnAnswer(BaseModel):
+    type: Literal["response"] = "response"
+    response: AssistantResponse
+
+
+class TurnFailed(BaseModel):
+    type: Literal["error"] = "error"
+    message: str
+
+
+async def owner_stream(events: AsyncIterator[BaseModel]) -> AsyncIterator[BaseModel]:
+    """Réduit le flux de debug à ce que voit le propriétaire. Une phrase n'est pas répétée :
+    deux branches parallèles ou un nœud sans phrase ne font pas clignoter l'affichage."""
+    last: str | None = None
+    async for e in events:
+        if isinstance(e, NodeStarted) and e.user_status and e.user_status != last:
+            last = e.user_status
+            yield TurnStatus(text=e.user_status)
+        elif isinstance(e, RunFinished) and e.response is not None:
+            yield TurnAnswer(response=e.response)
+        elif isinstance(e, RunError):
+            yield TurnFailed(message="Le service est momentanément indisponible.")

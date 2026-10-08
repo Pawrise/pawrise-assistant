@@ -365,7 +365,12 @@ export default function App() {
             {graphName === 'handoff' && run.summary && snap.ended ? (
               <HandoffPanel summary={run.summary} />
             ) : (
-              <AnswerPanel response={run.response} visible={snap.ended} error={run.error} />
+              <AnswerPanel
+                response={run.response}
+                visible={snap.ended}
+                error={run.error}
+                waiting={snap.waiting}
+              />
             )}
           </div>
         </aside>

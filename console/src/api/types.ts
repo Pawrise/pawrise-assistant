@@ -102,7 +102,14 @@ export type DebugEvent =
       from_attempt: number | null
       reused: ReusedStep[]
     }
-  | { type: 'node_started'; node: string; attempt: number; ts_ms: number }
+  | {
+      type: 'node_started'
+      node: string
+      attempt: number
+      ts_ms: number
+      /** Phrase d'attente montrée au propriétaire à cette étape. */
+      user_status?: string | null
+    }
   | {
       type: 'node_finished'
       node: string

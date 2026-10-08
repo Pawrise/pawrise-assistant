@@ -95,3 +95,26 @@ describe('parseur SSE', () => {
     expect(rest).toBe('data: {"y"')
   })
 })
+
+describe("phrase d'attente du propriétaire", () => {
+  const events: DebugEvent[] = [
+    { type: 'run_started', run_id: 'r', ts_ms: 0, input: {}, fork_of: null, from_node: null, from_attempt: null, reused: [] },
+    { ...start('generation', 1, 0), user_status: 'Je rédige la réponse…' } as DebugEvent,
+    done('generation', 1, 2),
+    start('finalize', 1, 2),
+  ]
+  const run = events.reduce(reduce, emptyRun)
+  const s = slots(run, true)
+
+  it('suit le dernier passage qui en a une, même pendant un nœud muet', () => {
+    expect(snapshot(run, s, 0, NODES).waiting).toBe('Je rédige la réponse…')
+    expect(snapshot(run, s, totalOf(s), NODES).waiting).toBe('Je rédige la réponse…')
+  })
+
+  it('disparaît une fois la réponse envoyée', () => {
+    const finished = reduce(run, done('finalize', 1, 3))
+    const end = reduce(finished, { type: 'run_finished', ts_ms: 4, response: null, summary: null })
+    const s2 = slots(end, true)
+    expect(snapshot(end, s2, totalOf(s2), NODES).waiting).toBeNull()
+  })
+})

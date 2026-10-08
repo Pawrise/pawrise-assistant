@@ -320,9 +320,22 @@ t=0      t≈300ms    t≈900ms   t≈1.5s     t≈5s      t≈5.2s
 └─────────── pipeline visible (stream_mode="custom") ───────┘   (stream d'affichage)
 ```
 
-Mécanisme : `get_stream_writer()` dans chaque nœud émet un événement de progression ;
-`graph.stream(stream_mode=["updates", "custom"])` les expose. L'assistant sert ce flux à `dialog`,
-qui le relaie à l'app. Le texte final n'est diffusé qu'après le verdict du nœud 6.
+Mécanisme réel : `POST /v1/turns/stream` lit les modes `updates` et `tasks` de LangGraph (pas
+`custom`, voir §3.3) et ne garde que ce que voit le propriétaire. Trois événements SSE, sans nom de
+nœud, brouillon ni score :
+
+| Événement | Contenu | Quand |
+|---|---|---|
+| `status` | `{"text": "Je vérifie la réponse…"}` | au début d'une étape qui a une phrase, jamais deux fois de suite la même |
+| `response` | l'`AssistantResponse` complète, vérifiée | une fois, en dernier |
+| `error` | un message neutre | le tour a échoué ; dialog affiche son propre texte |
+
+Les phrases sont dans `api/status.py` : lire le message, regarder le collier, consulter les fiches,
+rédiger, vérifier, et « Je reformule plus prudemment… » au second essai. Les nœuds internes ou
+instantanés (masquage, abus, aiguillage, textes fixes) n'en ont pas. Un `ping` toutes les 15 s
+garde la connexion ouverte. `dialog` relaie ce flux à l'app ; la console affiche la même phrase,
+avec un reflet animé, dans le panneau « Réponse envoyée ». L'effet machine à écrire du texte
+validé, s'il est voulu, se fait côté app : le texte est déjà vérifié.
 
 > **Amendement requis à la spec (§8).** Le NFR « first token p95 < 2 s » n'a plus de sens : aucun
 > token ne part avant validation. Il devient **« premier retour visible p95 < 2 s »**, satisfait par
@@ -426,7 +439,7 @@ Recherche : BM25 top-20 ∥ dense top-20 → fusion RRF → top-20 → reranker 
 | Schémas | Pydantic v2 | State, tools, sortie, validation en frontière |
 | Données | PostgreSQL + pgvector + FTS | §5.2 |
 | Reranker | Cohere Rerank 3.5 multilingue | ADR-003 |
-| LLM | Interface `LLMProvider` — OpenAI en dev, Azure OpenAI EU en cible | ADR-002 |
+| LLM | Interface `LLMProvider` — OpenAI (Azure écarté le 2026-10-08) | ADR-002 |
 | Observabilité | OpenTelemetry + **Langfuse self-hosté** | **pas LangSmith** — hébergement US, contradiction frontale avec la thèse data residency |
 | Console | Vite + React 19 + `@xyflow/react` + `elkjs` + shadcn/ui | §8 — graphe vivant, chronologie, inspecteur |
 | Tests | pytest + pytest-asyncio | — |
@@ -563,7 +576,7 @@ Principe de séquencement : **chaque lot se termine par quelque chose de montrab
 | **6** | Chronologie rejouable, inspecteur complet (chunks, scores, verdict claim par claim, coût), fork | tout est inspectable et rejouable | fait |
 | **7** | Audit append-only, OTel, Langfuse | audit + traces | OTel fait ; audit en JSONL, **stockage objet avec Object Lock à faire** (bucket nécessaire) |
 | **8** | Graphe de synthèse de dossier (flux E) | dossier de handoff généré | fait (gabarit) ; synthèse LLM à brancher |
-| **9** | Éval complète, régression CI, **smoke test Azure OpenAI EU** | KPIs mesurés, data residency vérifiée | évals v0 + régression faites ; **smoke test Azure à faire** (ressource Azure nécessaire) |
+| **9** | Éval complète, régression CI | KPIs mesurés | fait (évals v0, 4 passages réels) ; Azure écarté le 2026-10-08 |
 
 **Deux choix d'ordre à justifier.**
 
@@ -585,7 +598,6 @@ reconstruire.
 | `pawrise-dialog` (service Rust) | à désigner | l'intégration réelle, pas le développement |
 | Corpus vétérinaire curé | Elarif + Nino + vétérinaire | la qualité du RAG, pas le pipeline |
 | Revue clinique du golden set | Elarif | la validité des KPIs |
-| Azure OpenAI EU | Oumar | le lot 9 uniquement |
 | Core API (contrats) | Yassine | rien — le faux Core API couvre le développement |
 
 Aucune de ces dépendances ne bloque le démarrage. C'est le point du faux Core API et du corpus

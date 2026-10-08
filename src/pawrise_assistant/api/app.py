@@ -1,6 +1,8 @@
 """Service HTTP de l'assistant.
 
 - `POST /v1/turns` : l'API de prod, appelée par dialog. Un tour entre, une réponse JSON sort.
+- `POST /v1/turns/stream` : le même tour en SSE, avec des phrases d'attente (« Je vérifie la
+  réponse… ») puis la réponse vérifiée.
 - `GET /graph` : la topologie du graphe compilé, pour la console.
 - `POST /debug/runs` : le même tour, en flux SSE nœud par nœud, avec pannes injectables.
 - `POST /debug/runs/{id}/fork` : rejoue un tour depuis un nœud, en le réexécutant ou en forçant
@@ -23,8 +25,10 @@ from pawrise_assistant import tracing
 from pawrise_assistant.api.events import (
     EventMapper,
     RunStarted,
+    TurnAnswer,
     map_stream,
     new_run_id,
+    owner_stream,
     reused_steps,
 )
 from pawrise_assistant.api.scenarios import SCENARIOS, Scenario
@@ -98,6 +102,25 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
             span.set_attribute("pawrise.path", response.metadata.path)
             span.set_attribute("pawrise.escalation", response.escalation.trigger)
             return response
+
+    @app.post("/v1/turns/stream")
+    async def turns_stream(req: TurnRequest, request: Request) -> EventSourceResponse:
+        async def stream() -> AsyncIterator[dict[str, Any]]:
+            with tracing.turn_span(
+                "turn", request.headers, **{"pawrise.thread_id": req.thread_id}
+            ) as span:
+                parts = graph.astream(
+                    initial_state(req),
+                    context=deps.for_run(),
+                    stream_mode=["updates", "tasks"],
+                    version="v2",
+                )
+                async for event in owner_stream(map_stream(parts, EventMapper())):
+                    if isinstance(event, TurnAnswer):
+                        span.set_attribute("pawrise.path", event.response.metadata.path)
+                    yield _sse(event)
+
+        return EventSourceResponse(stream(), ping=15)
 
     @app.post("/v1/handoff-summaries")
     async def handoff_summaries(req: HandoffRequest, request: Request) -> HandoffSummary:

@@ -194,3 +194,35 @@ async def test_http_core_api_against_fake_service() -> None:
     with pytest.raises(UnknownPet):
         await api.get_pet_profile("pet_unknown")
     await api.aclose()
+
+
+def test_prod_stream_says_what_it_does_then_sends_the_checked_answer(client: TestClient) -> None:
+    body = {
+        "thread_id": "th",
+        "turn_id": "t",
+        "pet_ref": "pet_demo_rex",
+        "user_message": "Rex dort beaucoup depuis quelques jours",
+    }
+    events = _run(client, "/v1/turns/stream", body)
+    assert [e["text"] for e in events if e["type"] == "status"] == [
+        "Je lis votre message…",
+        "Je regarde les données du collier…",
+        "Je consulte les fiches santé…",
+        "Je rédige la réponse…",
+        "Je vérifie la réponse…",
+    ]
+    assert events[-1]["type"] == "response"
+    assert events[-1]["response"]["metadata"]["template_id"] is None
+    # Le propriétaire ne voit ni nom de nœud, ni brouillon, ni score.
+    assert {k for e in events for k in e} <= {"type", "text", "response"}
+
+
+def test_a_second_draft_has_its_own_waiting_line(client: TestClient) -> None:
+    from pawrise_assistant.api.status import RETRY
+
+    events = _run(
+        client,
+        "/debug/runs",
+        {"user_message": "Il boite depuis hier", "faults": ["draft_diagnostic"]},
+    )
+    assert RETRY in [e["user_status"] for e in events if e["type"] == "node_started"]
