@@ -190,30 +190,30 @@ Ce qui circule entre les nœuds. La pièce la plus structurante : tout le reste 
 ```python
 class AssistantState(TypedDict):
     # — Identité —
-    thread_id: str          # appartient à dialog, on ne fait que le porter
-    pet_ref: str            # pseudonyme, JAMAIS le pet_id réel (ADR-006)
+    thread_id: str  # appartient à dialog, on ne fait que le porter
+    pet_ref: str  # pseudonyme, JAMAIS le pet_id réel (ADR-006)
     turn_id: str
 
     # — Entrée (fournie par dialog) —
     user_message: str
-    history: list[Turn]                                  # pas de mémoire locale
-    alert_context: NotRequired[AlertContext | None]      # flux B
+    history: list[Turn]  # pas de mémoire locale
+    alert_context: NotRequired[AlertContext | None]  # flux B
 
     # — Nœud 1 : Circuit Breaker —
-    intent: NotRequired[Intent]                          # clean | diagnosis_request
-                                                         # | abuse | jailbreak | out_of_scope
+    intent: NotRequired[Intent]  # clean | diagnosis_request
+    # | abuse | jailbreak | out_of_scope
     intent_confidence: NotRequired[float]
 
     # — Nœud 2 : Query Understanding —
     canonical_query: NotRequired[str]
-    needs_retrieval: NotRequired[bool]                   # False → variante small-talk
-    pet_context: NotRequired[PetContext]                 # résultat des tool calls
+    needs_retrieval: NotRequired[bool]  # False → variante small-talk
+    pet_context: NotRequired[PetContext]  # résultat des tool calls
 
     # — Nœud 3 : Retrieval —
-    candidates: NotRequired[list[Chunk]]                 # top 20
+    candidates: NotRequired[list[Chunk]]  # top 20
 
     # — Nœud 4 : Relevance Filter —
-    context_chunks: NotRequired[list[Chunk]]             # top 5
+    context_chunks: NotRequired[list[Chunk]]  # top 5
 
     # — Nœud 5 : Génération —
     draft: NotRequired[DraftAnswer]
@@ -223,10 +223,10 @@ class AssistantState(TypedDict):
     retry_count: int
 
     # — Sortie —
-    response: NotRequired[AssistantResponse]             # ADR-005
+    response: NotRequired[AssistantResponse]  # ADR-005
 
     # — Transverse —
-    trace: Annotated[list[NodeTrace], add]               # audit + UI dev
+    trace: Annotated[list[NodeTrace], add]  # audit + UI dev
 ```
 
 Trois choix à noter :
@@ -406,6 +406,7 @@ Recherche : BM25 top-20 ∥ dense top-20 → fusion RRF → top-20 → reranker 
 | Reranker | Cohere Rerank 3.5 multilingue | ADR-003 |
 | LLM | Interface `LLMProvider` — OpenAI en dev, Azure OpenAI EU en cible | ADR-002 |
 | Observabilité | OpenTelemetry + **Langfuse self-hosté** | **pas LangSmith** — hébergement US, contradiction frontale avec la thèse data residency |
+| Console | Vite + React 19 + `@xyflow/react` + `elkjs` + shadcn/ui | §8 — graphe vivant, chronologie, inspecteur |
 | Tests | pytest + pytest-asyncio | — |
 | Qualité | ruff, mypy strict | — |
 | CI | GitHub Actions | Couverture ≥ 80 % global, **≥ 90 % sur les nœuds 1 et 6** — aligné sur l'engagement de soutenance |
@@ -440,30 +441,60 @@ que le corpus d'amorce est en place (fin du lot 4).
 
 ---
 
-## 8. UI de développement
+## 8. Console
 
-**Un harnais d'observation, pas une maquette produit.** Il parle directement à l'assistant, sans
-passer par `dialog`.
+**Décision (2026-10-08) : option D, « graphe vivant + chronologie ».** La console parle directement
+à l'assistant, sans `dialog`. Elle sert au debug, à la démo de soutenance et, plus tard, à la revue
+clinique.
 
-Ce qu'il doit montrer :
+### 8.1 L'écran
 
-- les 6 nœuds qui s'allument en direct, avec leur latence ;
-- l'intention classée par le nœud 1 et sa confiance ;
-- les 20 chunks récupérés avec leurs scores BM25 / dense / RRF ;
-- l'avant/après reranking ;
-- le verdict du guardrail, claim par claim, avec la source qui l'ancre ;
-- le JSON final brut ;
-- le coût du tour, décomposé par nœud.
+| Zone | Ce qu'elle montre |
+|---|---|
+| Graphe | Le graphe **complet** (6 nœuds, 3 sorties cadrées, `finalize`, tools). En direct : nœud en cours qui pulse, arête empruntée tracée, compteur ×2 sur un nœud repassé. En fin de tour, les nœuds jamais démarrés passent « non appelé » |
+| Chronologie | Une barre par passage de nœud. Un curseur rejoue le tour pas à pas sur le graphe ; clic sur une barre = aller à la fin de ce passage |
+| Inspecteur | Le nœud sélectionné : chaque passage, sa durée, ce qu'il a écrit dans le state, ses scores (chunks, rerank, verdict claim par claim), son coût |
+| Réponse | N'apparaît qu'après `finalize` : on voit que rien ne sort avant le guardrail |
 
-**Technique : FastAPI + SSE + une page sans build.** Pas de Next.js ici — ajouter une toolchain Node
-à un repo Python pour un outil interne est un coût permanent pour un gain nul. Un seul `uv run`
-démarre tout.
+États d'un nœud : en attente · en cours · fait · redirigé/rejeté · non appelé. Toujours couleur +
+symbole + mot.
 
-`langgraph dev` fournit LangGraph Studio gratuitement pour le débogage du graphe ; les deux sont
-complémentaires. Mais c'est le harnais qui rend ADR-007 **démontrable** — et un garde-fou qu'on peut
-montrer vaut mieux qu'un garde-fou qu'on affirme.
+Maquette : https://claude.ai/artifact/EYEkHEbeUdJk5vyNH2dyng (page « 4 expériences », option D).
 
-**Livré en deux temps** (§10) : version minimale au lot 2, inspecteur complet au lot 6.
+### 8.2 Écartées
+
+- **Trace d'abord** (arbre type Langfuse) : les branches non prises disparaissent, on perd le graphe.
+  Langfuse le fait déjà (§7).
+- **Chat d'abord** : le graphe est caché. C'est le modèle de l'app propriétaire, pas de la console.
+- **Graphe seul, sans chronologie** : on ne voit ni les durées ni l'ordre des passages (boucle 6 → 5).
+
+### 8.3 Contrat
+
+- `GET /graph` : topologie issue de `graph.get_graph()` (nœuds, arêtes, libellé des conditions).
+  La console ne dessine jamais un graphe à la main. Positions calculées une fois (ELK) puis figées.
+- `POST /debug/runs` → flux SSE, schéma Pydantic exporté en JSON Schema puis Zod :
+  `run_started` · `node_started {node, attempt}` · `node_finished {node, attempt, duration_ms,
+  update}` · `custom {node, kind, data}` · `run_error` · `run_finished {response}`. Noms calqués sur
+  AG-UI pour pouvoir migrer plus tard.
+- Côté graphe : `astream(version="v2", stream_mode=["updates", "custom"])` + `get_stream_writer()`.
+- L'arête empruntée se déduit du nœud qui démarre ensuite ; « non appelé » n'est connu qu'à
+  `run_finished`.
+- **Ce flux n'est pas l'API de prod** : endpoint désactivé hors dev.
+
+### 8.4 Rejouer
+
+Checkpointer **dans la console seulement**, `durability="sync"` (un point de reprise par nœud).
+Fork : `update_state(config, values, as_node=…)` puis `invoke(None, config)`. En prod, l'assistant
+reste sans état (§1.3).
+
+### 8.5 Technique
+
+**Remplace la décision « page sans build ».** Un graphe animé, une chronologie et un inspecteur ne
+tiennent pas sans composants. Dossier `console/` : Vite + React 19 + TypeScript, `@xyflow/react` 12 +
+`elkjs`, shadcn/ui pour les panneaux. Pas de SDK d'agent (`useStream` suppose l'Agent Server,
+`useChat` pense en messages, pas en nœuds).
+
+**Livré en deux temps** (§10) : graphe vivant au lot 2, chronologie + inspecteur complet au lot 6.
 
 ---
 
@@ -482,6 +513,7 @@ L'écart doc/réel est précisément ce qui a été reproché à l'équipe en é
 | 9.6 | Monorepo | L'architecture prescrit un monorepo polyglotte. Repo séparé acté — à amender explicitement |
 | 9.7 | Observabilité | Proscrire LangSmith (hébergement US). Langfuse self-hosté ou OTel pur |
 | 9.8 | **Inventaire de services** | **Ajout de `pawrise-dialog` (Rust)** — porte FR34, FR37, FR40, FR42 et la machine à états du handoff. ADR-004 amendé : l'historique de conversation appartient à `dialog`, l'assistant est sans état. **À valider en revue d'équipe** |
+| 9.9 | Console (§8) | « Page sans build » abandonnée : console React séparée (`console/`), option D. Ajoute une toolchain Node au repo |
 
 **Restent ouvertes** (arbitrage produit, hors périmètre de ce document) : quotas chatbot par tier
 tarifaire, audit trail visible par le propriétaire ou non, cadence d'éval vétérinaire, nombre de
@@ -497,11 +529,11 @@ Principe de séquencement : **chaque lot se termine par quelque chose de montrab
 |---|---|---|
 | **0** | Repo, `uv`, ruff/mypy/pytest, Docker, CI | CI verte |
 | **1** | Schémas Pydantic (state, tools, sortie), faux Core API, données simulées | on interroge le chien simulé |
-| **2** | `LLMProvider` + cascade, graphe câblé bout en bout avec nœuds bouchons, **harnais SSE minimal** | un tour traverse les 6 nœuds, on le voit |
+| **2** | `LLMProvider` + cascade, graphe câblé bout en bout avec nœuds bouchons, `GET /graph` + flux SSE, **console : graphe vivant** | un tour traverse le graphe, on le voit s'allumer |
 | **3** | **Nœuds 1 et 6 réels** + jeu adversarial | « demande-lui de te diagnostiquer » → la cage tient |
 | **4** | Corpus d'amorce, ingestion, pgvector + FTS, RRF, reranker → nœuds 3 et 4 | réponse sourcée |
 | **5** | Nœuds 2 et 5 complets, tools télémétrie | flux A et B complets |
-| **6** | Inspecteur complet (chunks, scores, verdict claim par claim, coût) | tout est inspectable |
+| **6** | Chronologie rejouable, inspecteur complet (chunks, scores, verdict claim par claim, coût), fork | tout est inspectable et rejouable |
 | **7** | Audit append-only, OTel, Langfuse | audit + traces |
 | **8** | Graphe de synthèse de dossier (flux E) | dossier de handoff généré |
 | **9** | Éval complète, régression CI, **smoke test Azure OpenAI EU** | KPIs mesurés, data residency vérifiée |
@@ -512,9 +544,10 @@ Principe de séquencement : **chaque lot se termine par quelque chose de montrab
 différenciation produit, ils sont testables sans corpus, et c'est ce qui se démontre le mieux devant
 un jury.
 
-**Le harnais est coupé en deux.** Le `stream_mode` est déjà câblé au lot 2 : exposer un flux SSE brut
-à ce moment-là coûte presque rien, et évite de déboguer les lots 3 à 5 à l'aveugle. L'inspecteur
-riche attend que les nœuds soient réels — le construire plus tôt, ce serait le reconstruire.
+**La console est coupée en deux.** Le `stream_mode` est déjà câblé au lot 2 : brancher le graphe
+vivant à ce moment-là coûte peu, et évite de déboguer les lots 3 à 5 à l'aveugle. La chronologie et
+l'inspecteur riche attendent que les nœuds soient réels — les construire plus tôt, ce serait les
+reconstruire.
 
 ---
 
