@@ -1,6 +1,7 @@
 import { Bell, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { admin, type Day, type PetControls, type PetView } from '@/api/admin'
+import { PetAvatar } from '@/components/PetAvatar'
 import { cn } from '@/lib/utils'
 
 /** 30 jours, du plus ancien au plus récent ; les 7 derniers ressortent, la moyenne d'avant en pointillé. */
@@ -68,9 +69,7 @@ function PetCard({ pet, onChange }: { pet: PetView; onChange: (p: PetView) => vo
   return (
     <article className="flex flex-col gap-4 rounded-2xl border bg-white p-4 shadow-xs sm:p-5">
       <header className="flex items-center gap-3">
-        <span className="grid size-11 place-items-center rounded-full bg-amber-100 text-lg font-semibold text-amber-900">
-          {pet.name[0]}
-        </span>
+        <PetAvatar petRef={pet.pet_ref} name={pet.name} className="size-11 text-lg" />
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-2 font-semibold">
             {pet.name}

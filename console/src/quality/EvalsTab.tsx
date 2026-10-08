@@ -82,7 +82,9 @@ export function EvalsTab({ evals, onStart, info }: { evals: EvalState; onStart: 
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
               Chaque cas traverse le vrai parcours. Les indicateurs sont comparés aux cibles du projet.
-              {info?.ai ? ' Avec l’IA : environ une minute et quelques centimes.' : ''}
+              {info?.ai
+                ? ` Modèles : ${info.models.join(' (tri, vérification) et ')} (rédaction). Environ une minute et quelques centimes.`
+                : ' Mode sans IA : règles et textes types.'}
             </p>
           </div>
           <button

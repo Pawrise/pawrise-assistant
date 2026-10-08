@@ -26,6 +26,7 @@ export type StoreAction =
   | { type: 'add'; id: string; entry: NewEntry }
   | { type: 'event'; id: string; event: DebugEvent }
   | { type: 'failed'; id: string; message: string }
+  | { type: 'clear'; origin: Origin }
 
 export function storeReduce(entries: Entry[], a: StoreAction): Entry[] {
   switch (a.type) {
@@ -33,6 +34,8 @@ export function storeReduce(entries: Entry[], a: StoreAction): Entry[] {
       return [...entries, { ...a.entry, id: a.id, createdAt: Date.now(), run: emptyRun }]
     case 'event':
       return entries.map((e) => (e.id === a.id ? { ...e, run: reduce(e.run, a.event) } : e))
+    case 'clear':
+      return entries.filter((e) => e.origin !== a.origin)
     case 'failed':
       return entries.map((e) =>
         e.id === a.id ? { ...e, run: reduce(e.run, { type: 'run_error', ts_ms: 0, message: a.message }) } : e,

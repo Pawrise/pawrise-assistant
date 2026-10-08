@@ -1,10 +1,11 @@
-import { ArrowUp, ChevronRight, FileText, PawPrint, Siren, Stethoscope, X, Zap } from 'lucide-react'
+import { ArrowUp, ChevronRight, FileText, PawPrint, Siren, SquarePen, Stethoscope, X, Zap } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import type { Pet, Scenario } from '@/api/types'
 import { FAULTS, TONE, verdict } from '@/app/labels'
 import { href } from '@/app/route'
 import { liveStatus, type Entry } from '@/app/store'
 import { HandoffPanel } from '@/components/HandoffPanel'
+import { PetAvatar } from '@/components/PetAvatar'
 import { cn } from '@/lib/utils'
 import { fmtMs } from '@/run/status'
 
@@ -247,6 +248,7 @@ export function ChatPane({
   onSend,
   onScenario,
   onHandoff,
+  onReset,
 }: {
   entries: Entry[]
   pets: Pet[]
@@ -265,6 +267,8 @@ export function ChatPane({
   onSend: (message: string) => void
   onScenario: (s: Scenario) => void
   onHandoff: (e: Entry) => void
+  /** Vide la discussion : l'historique envoyé à l'assistant repart de zéro. */
+  onReset: () => void
 }) {
   const [draft, setDraft] = useState('')
   const end = useRef<HTMLDivElement>(null)
@@ -297,7 +301,7 @@ export function ChatPane({
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5 px-4 py-5 sm:px-6">
-          <div className="flex items-center justify-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
             {pets.map((p) => (
               <button
                 key={p.pet_ref}
@@ -309,15 +313,25 @@ export function ChatPane({
                   p.pet_ref === petRef ? 'border-zinc-900 bg-white font-medium shadow-xs' : 'border-transparent text-zinc-500 hover:bg-white',
                 )}
               >
-                <span className="grid size-6 place-items-center rounded-full bg-amber-100 text-xs font-semibold text-amber-900">
-                  {p.name[0]}
-                </span>
+                <PetAvatar petRef={p.pet_ref} name={p.name} className="size-6 text-xs" />
                 {p.name}
                 <span className="hidden text-xs font-normal text-zinc-500 sm:inline">
                   {p.breed}, {p.age_years} ans
                 </span>
               </button>
             ))}
+            {entries.length ? (
+              <button
+                type="button"
+                onClick={onReset}
+                disabled={busy}
+                title="Repartir d’une conversation vide"
+                className="ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border bg-white px-3 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
+              >
+                <SquarePen className="size-4" />
+                <span className="hidden sm:inline">Nouvelle conversation</span>
+              </button>
+            ) : null}
           </div>
 
           {!entries.length ? (

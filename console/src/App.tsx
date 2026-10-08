@@ -176,7 +176,7 @@ export default function App() {
   const live = entries.some((e) => e.run.phase === 'running')
 
   return (
-    <Shell view={route.view} info={info} live={live} onDemo={() => setDemo(true)}>
+    <Shell view={route.view} live={live} onDemo={() => setDemo(true)}>
       {route.view === 'conversation' ? (
         <ConversationView
           entries={chat}
@@ -195,6 +195,7 @@ export default function App() {
           }}
           onHandoff={handoff}
           onRerun={rerun}
+          onReset={() => dispatch({ type: 'clear', origin: 'chat' })}
         />
       ) : route.view === 'knowledge' ? (
         <KnowledgeView tab={route.tab} id={route.id} cited={cited} />

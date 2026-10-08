@@ -28,6 +28,7 @@ export function ConversationView({
   onScenario,
   onHandoff,
   onRerun,
+  onReset,
 }: {
   entries: Entry[]
   topologies: Partial<Record<GraphName, Topology>>
@@ -42,6 +43,7 @@ export function ConversationView({
   onScenario: (s: Scenario) => void
   onHandoff: (e: Entry) => void
   onRerun: (entry: Entry, node: string, attempt: number) => void
+  onReset: () => void
 }) {
   const wide = useMedia('(min-width: 1024px)')
   const tablet = useMedia('(min-width: 768px)')
@@ -85,6 +87,10 @@ export function ConversationView({
       onSend={onSend}
       onScenario={onScenario}
       onHandoff={onHandoff}
+      onReset={() => {
+        setSelectedId(null)
+        onReset()
+      }}
     />
   )
   const flow = <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} />

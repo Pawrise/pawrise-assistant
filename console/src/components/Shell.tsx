@@ -1,6 +1,5 @@
 import { BookOpen, MessageCircle, PawPrint, Presentation, ShieldCheck, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { Info } from '@/api/types'
 import { href, type View } from '@/app/route'
 import { cn } from '@/lib/utils'
 
@@ -10,31 +9,13 @@ const TABS: { view: View; label: string; icon: LucideIcon }[] = [
   { view: 'quality', label: 'Qualité', icon: ShieldCheck },
 ]
 
-function Mode({ info }: { info: Info | null }) {
-  if (!info) return null
-  return (
-    <span
-      title={info.ai ? `Modèles : ${info.models.join(', ')}` : 'Règles et textes types, sans appel à une IA'}
-      className={cn(
-        'hidden h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium sm:inline-flex',
-        info.ai ? 'bg-violet-50 text-violet-800 ring-1 ring-violet-600/15' : 'bg-zinc-100 text-zinc-600',
-      )}
-    >
-      <span className={cn('size-1.5 rounded-full', info.ai ? 'bg-violet-500' : 'bg-zinc-400')} />
-      {info.ai ? `IA · ${info.models.at(-1)}` : 'Sans IA'}
-    </span>
-  )
-}
-
 export function Shell({
   view,
-  info,
   live,
   onDemo,
   children,
 }: {
   view: View
-  info: Info | null
   live: boolean
   onDemo: () => void
   children: ReactNode
@@ -70,7 +51,6 @@ export function Shell({
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 md:ml-0">
-          <Mode info={info} />
           <button
             type="button"
             onClick={onDemo}
