@@ -21,6 +21,16 @@ npm --prefix console run dev             # console sur http://127.0.0.1:5173
 Aucune clé ni service externe n'est nécessaire : en mode dev, le Core API est simulé (deux chiens,
 30 jours de données) et les nœuds tournent avec des composants déterministes.
 
+## Côté propriétaire : le flux SSE
+
+`POST /v1/turns/stream` envoie des phrases d'attente (`status`), puis la réponse vérifiée
+(`response`). Aucun texte ne part avant la vérification.
+
+```bash
+curl -N http://127.0.0.1:8100/v1/turns/stream -H 'content-type: application/json' \
+  -d '{"thread_id":"t","turn_id":"1","pet_ref":"pet_demo_rex","user_message":"Rex dort beaucoup, normal ?"}'
+```
+
 ## La console
 
 Le graphe complet, en direct : chaque nœud s'allume quand il travaille, l'arête empruntée se trace,
