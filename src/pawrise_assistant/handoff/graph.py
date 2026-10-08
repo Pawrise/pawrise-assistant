@@ -70,13 +70,17 @@ async def collect(state: HandoffState, runtime: Runtime[Deps]) -> dict[str, Any]
     profile = p if isinstance(p, PetProfile) else None
     telemetry = t if isinstance(t, TelemetrySummary) else None
     alerts: list[Alert] = a if isinstance(a, list) else []
-    names = ("get_pet_profile", "get_recent_telemetry(7j)", f"get_recent_alerts({req.window_days}j)")
-    tools = [
+    names = (
+        "get_pet_profile",
+        "get_recent_telemetry(7j)",
+        f"get_recent_alerts({req.window_days}j)",
+    )
+    tools: list[dict[str, Any]] = [
         {"tool": n, "ok": not isinstance(r, BaseException)}
         | ({"error": str(r)} if isinstance(r, BaseException) else {})
         for n, r in zip(names, results, strict=True)
     ]
-    missing = [t["tool"] for t in tools if not t["ok"]]
+    missing: list[str] = [t["tool"] for t in tools if not t["ok"]]
     return {
         "profile": profile,
         "telemetry": telemetry,

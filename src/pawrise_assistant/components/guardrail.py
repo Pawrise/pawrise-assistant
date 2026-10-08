@@ -40,7 +40,7 @@ _DIAGNOSTIC = [
 URGENT_SIGNALS = re.compile(
     r"\b(chocolat|raisins?|xylitol|oignons?|mort aux rats|antigel|poison|toxique|empoisonn|"
     r"ne respire|respire mal|du mal a respirer|convuls|s est effondre|effondrement|"
-    r"ventre gonfle|saigne beaucoup|hemorragie|inconscient)"
+    r"ventre (est )?(gonfle|dur)|essaie de vomir|saigne beaucoup|hemorragie|inconscient)"
 )
 
 

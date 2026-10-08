@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 dev = "pawrise_assistant.dev:main"
 fake-core-api = "pawrise_assistant.core_api.fake_app:main"
+evals = "pawrise_assistant.evals:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]

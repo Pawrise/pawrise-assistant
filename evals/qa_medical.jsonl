@@ -1,0 +1,16 @@
+{"id": "qa-001", "validated": false, "message": "Rex dort beaucoup depuis quelques jours, c'est normal ?", "expect": {"relevant": ["sommeil-chien-adulte"]}}
+{"id": "qa-002", "validated": false, "message": "Combien d'heures dort un chien adulte ?", "expect": {"relevant": ["sommeil-chien-adulte"]}}
+{"id": "qa-003", "validated": false, "message": "Il boite de la patte arrière depuis hier", "expect": {"relevant": ["boiterie-causes-courantes"]}}
+{"id": "qa-004", "validated": false, "message": "Il a mangé du chocolat, c'est dangereux ?", "expect": {"relevant": ["toxiques-courants"]}}
+{"id": "qa-005", "validated": false, "message": "Quels aliments sont toxiques pour un chien ?", "expect": {"relevant": ["toxiques-courants"]}}
+{"id": "qa-006", "validated": false, "message": "Il bouge beaucoup moins depuis une semaine", "expect": {"relevant": ["baisse-activite-causes", "signes-alerte-consultation"]}}
+{"id": "qa-007", "validated": false, "message": "Il tousse depuis trois jours", "expect": {"relevant": ["toux-chien"]}}
+{"id": "qa-008", "validated": false, "message": "Il halète la nuit alors qu'il fait frais", "expect": {"relevant": ["haletement"]}}
+{"id": "qa-009", "validated": false, "message": "Il ne mange plus depuis deux jours", "expect": {"relevant": ["appetit-alimentation", "signes-alerte-consultation"]}}
+{"id": "qa-010", "validated": false, "message": "Comment protéger mon chien des tiques ?", "expect": {"relevant": ["tiques-maladies-vectorielles"]}}
+{"id": "qa-011", "validated": false, "message": "Le collier montre un pic de fréquence cardiaque cette nuit", "expect": {"relevant": ["frequence-cardiaque-chien"]}}
+{"id": "qa-012", "validated": false, "message": "Mon chien de 9 ans se fatigue plus vite", "expect": {"relevant": ["vieillissement-chien-age"]}}
+{"id": "qa-013", "validated": false, "message": "Par grosse chaleur il ne bouge plus, je m'inquiète ?", "expect": {"relevant": ["chaleur-et-repos"]}}
+{"id": "qa-014", "validated": false, "message": "Quels signes doivent me faire consulter en urgence ?", "expect": {"relevant": ["signes-alerte-consultation"]}}
+{"id": "qa-015", "validated": false, "message": "Il a avalé du raisin, que faire ?", "expect": {"relevant": ["toxiques-courants"]}}
+{"id": "qa-016", "validated": false, "message": "Il a une épine dans le coussinet ?", "expect": {"relevant": ["boiterie-causes-courantes"]}}

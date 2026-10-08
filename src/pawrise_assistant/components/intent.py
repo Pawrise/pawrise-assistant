@@ -45,7 +45,7 @@ _DIAGNOSIS = [
 ]
 _ABUSE = [r"\b(connard|connasse|salope|encule|ta gueule|nique)\b"]
 _ANIMAL_HINTS = re.compile(
-    r"\b(chien|chienne|chiot|il|elle|rex|nala|patte|collier|veto|veterinaire|mange|dort|boite|"
+    r"\b(chien|chienne|chiot|rex|nala|patte|collier|veto|veterinaire|mange|dort|boite|"
     r"alerte|activite|sommeil|merci|bonjour|salut|ok|super)\b"
 )
 _OFF_TOPIC = [r"\b(recette|bourse|meteo|horoscope|code python|javascript|politique|elections?)\b"]
