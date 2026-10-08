@@ -1,0 +1,53 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: pawrise
+          POSTGRES_DB: pawrise
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pawrise" --health-interval 5s --health-retries 10
+    env:
+      PAWRISE_TEST_DATABASE_URL: postgresql://pawrise@127.0.0.1:5432/pawrise
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - name: Tests, évals bloquantes et couverture (≥ 80 % global)
+        run: uv run pytest --cov --cov-report=term --cov-fail-under=80
+      - name: Couverture des garde-fous (≥ 90 % sur les nœuds 1 et 6)
+        run: >
+          uv run coverage report --fail-under=90
+          --include="*/components/intent.py,*/components/guardrail.py,*/components/safe_responses.py,*/llm/components.py"
+
+  console:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
