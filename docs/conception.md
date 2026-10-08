@@ -474,9 +474,12 @@ Maquette : https://claude.ai/artifact/EYEkHEbeUdJk5vyNH2dyng (page « 4 expérie
   La console ne dessine jamais un graphe à la main. Positions calculées une fois (ELK) puis figées.
 - `POST /debug/runs` → flux SSE, schéma Pydantic exporté en JSON Schema puis Zod :
   `run_started` · `node_started {node, attempt}` · `node_finished {node, attempt, duration_ms,
-  update}` · `custom {node, kind, data}` · `run_error` · `run_finished {response}`. Noms calqués sur
-  AG-UI pour pouvoir migrer plus tard.
-- Côté graphe : `astream(version="v2", stream_mode=["updates", "custom"])` + `get_stream_writer()`.
+  status, summary, data, recovered_to}` · `run_error` · `run_finished {response | summary}`. Noms
+  calqués sur AG-UI pour pouvoir migrer plus tard.
+- Côté graphe : `astream(version="v2", stream_mode=["updates", "tasks"])`. Le détail d'un nœud
+  (scores, outils, claims) voyage dans sa `NodeTrace`, pas dans le mode `custom` : **en LangGraph
+  1.2.14, `custom` combiné à un `error_handler` relance en fin de tour l'exception pourtant
+  rattrapée** (constaté et reproduit le 2026-10-08). Le mode `tasks` fonctionne sans checkpointer.
 - L'arête empruntée se déduit du nœud qui démarre ensuite ; « non appelé » n'est connu qu'à
   `run_finished`.
 - **Ce flux n'est pas l'API de prod** : endpoint désactivé hors dev.
@@ -514,6 +517,8 @@ L'écart doc/réel est précisément ce qui a été reproché à l'équipe en é
 | 9.7 | Observabilité | Proscrire LangSmith (hébergement US). Langfuse self-hosté ou OTel pur |
 | 9.8 | **Inventaire de services** | **Ajout de `pawrise-dialog` (Rust)** — porte FR34, FR37, FR40, FR42 et la machine à états du handoff. ADR-004 amendé : l'historique de conversation appartient à `dialog`, l'assistant est sans état. **À valider en revue d'équipe** |
 | 9.9 | Console (§8) | « Page sans build » abandonnée : console React séparée (`console/`), option D. Ajoute une toolchain Node au repo |
+| 9.10 | Données simulées (§4.2) | Deux chiens de référence au lieu d'un : Rex (variation modérée) et Nala (les deux anomalies scénarisées), pour que les flux A et B ne se marchent pas dessus |
+| 9.11 | Garde-fous (ADR-007) | Les règles déterministes restent actives sous le LLM, aux nœuds 1 et 6 : le LLM ajoute de la couverture, il ne retire jamais une règle |
 
 **Restent ouvertes** (arbitrage produit, hors périmètre de ce document) : quotas chatbot par tier
 tarifaire, audit trail visible par le propriétaire ou non, cadence d'éval vétérinaire, nombre de
@@ -525,18 +530,18 @@ vétérinaires partenaires au MVP.
 
 Principe de séquencement : **chaque lot se termine par quelque chose de montrable.**
 
-| Lot | Contenu | Fin de lot = |
-|---|---|---|
-| **0** | Repo, `uv`, ruff/mypy/pytest, Docker, CI | CI verte |
-| **1** | Schémas Pydantic (state, tools, sortie), faux Core API, données simulées | on interroge le chien simulé |
-| **2** | `LLMProvider` + cascade, graphe câblé bout en bout avec nœuds bouchons, `GET /graph` + flux SSE, **console : graphe vivant** | un tour traverse le graphe, on le voit s'allumer |
-| **3** | **Nœuds 1 et 6 réels** + jeu adversarial | « demande-lui de te diagnostiquer » → la cage tient |
-| **4** | Corpus d'amorce, ingestion, pgvector + FTS, RRF, reranker → nœuds 3 et 4 | réponse sourcée |
-| **5** | Nœuds 2 et 5 complets, tools télémétrie | flux A et B complets |
-| **6** | Chronologie rejouable, inspecteur complet (chunks, scores, verdict claim par claim, coût), fork | tout est inspectable et rejouable |
-| **7** | Audit append-only, OTel, Langfuse | audit + traces |
-| **8** | Graphe de synthèse de dossier (flux E) | dossier de handoff généré |
-| **9** | Éval complète, régression CI, **smoke test Azure OpenAI EU** | KPIs mesurés, data residency vérifiée |
+| Lot | Contenu | Fin de lot = | État (2026-10-08) |
+|---|---|---|---|
+| **0** | Repo, `uv`, ruff/mypy/pytest, Docker, CI | CI verte | fait, sauf workflow CI et Dockerfile à poser à la main (droits) |
+| **1** | Schémas Pydantic (state, tools, sortie), faux Core API, données simulées | on interroge le chien simulé | fait |
+| **2** | `LLMProvider` + cascade, graphe câblé bout en bout avec nœuds bouchons, `GET /graph` + flux SSE, **console : graphe vivant** | un tour traverse le graphe, on le voit s'allumer | fait |
+| **3** | **Nœuds 1 et 6 réels** + jeu adversarial | « demande-lui de te diagnostiquer » → la cage tient | fait (règles) ; LLM codé et testé hors ligne, **à valider avec une vraie clé** |
+| **4** | Corpus d'amorce, ingestion, pgvector + FTS, RRF, reranker → nœuds 3 et 4 | réponse sourcée | fait (Postgres testé) ; embeddings OpenAI et Cohere **à valider avec une vraie clé** |
+| **5** | Nœuds 2 et 5 complets, tools télémétrie | flux A et B complets | fait (règles et gabarits) ; LLM comme lot 3 |
+| **6** | Chronologie rejouable, inspecteur complet (chunks, scores, verdict claim par claim, coût), fork | tout est inspectable et rejouable | fait |
+| **7** | Audit append-only, OTel, Langfuse | audit + traces | OTel fait ; audit en JSONL, **stockage objet avec Object Lock à faire** (bucket nécessaire) |
+| **8** | Graphe de synthèse de dossier (flux E) | dossier de handoff généré | fait (gabarit) ; synthèse LLM à brancher |
+| **9** | Éval complète, régression CI, **smoke test Azure OpenAI EU** | KPIs mesurés, data residency vérifiée | évals v0 + régression faites ; **smoke test Azure à faire** (ressource Azure nécessaire) |
 
 **Deux choix d'ordre à justifier.**
 
