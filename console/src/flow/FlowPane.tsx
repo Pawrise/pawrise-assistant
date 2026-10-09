@@ -2,7 +2,7 @@ import { CircleHelp, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GraphName, Topology, TopologyNode } from '@/api/types'
 import type { Entry } from '@/app/store'
-import { Sheet } from '@/components/Sheet'
+import { Popover } from '@/components/Popover'
 import { emptyRun, shapeOf, slots as toSlots, snapshot, totalOf } from '@/run/model'
 import { FlowGraph } from './FlowGraph'
 import { Legend } from './Legend'
@@ -105,14 +105,24 @@ export function FlowPane({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setLegend(true)}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+        <Popover
+          open={legend}
+          onClose={() => setLegend(false)}
+          label="Comment lire le parcours"
+          trigger={
+            <button
+              type="button"
+              onClick={() => setLegend(!legend)}
+              aria-expanded={legend}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              <CircleHelp className="size-3.5" />
+              <span className="hidden sm:inline">Comment lire</span>
+            </button>
+          }
         >
-          <CircleHelp className="size-3.5" />
-          <span className="hidden sm:inline">Comment lire</span>
-        </button>
+          <Legend />
+        </Popover>
         {onClose ? (
           <button
             type="button"
@@ -134,6 +144,26 @@ export function FlowPane({
             attempts={shownAttempts}
             selected={selected}
             onSelect={(n) => setSelected(n === selected ? null : n)}
+            onClose={() => setSelected(null)}
+            detail={
+              selected && meta[selected] ? (
+                <StepPanel
+                  key={selected}
+                  meta={meta[selected]}
+                  snap={snap.nodes[selected]}
+                  attempts={shownAttempts.filter((a) => a.node === selected)}
+                  onClose={() => setSelected(null)}
+                  onRerun={
+                    entry && onRerun && entry.graph === 'turn' && !live && run.runId
+                      ? (node, attempt) => {
+                          setSelected(null)
+                          onRerun(entry, node, attempt)
+                        }
+                      : undefined
+                  }
+                />
+              ) : null
+            }
           />
         ) : (
           <p className="p-6 text-sm text-zinc-500">Chargement du parcours…</p>
@@ -156,27 +186,6 @@ export function FlowPane({
         </div>
       ) : null}
 
-      <Sheet open={Boolean(selected && meta[selected])} onClose={() => setSelected(null)} label="Détail de l’étape">
-        {selected && meta[selected] ? (
-          <StepPanel
-            meta={meta[selected]}
-            snap={snap.nodes[selected]}
-            attempts={shownAttempts.filter((a) => a.node === selected)}
-            onClose={() => setSelected(null)}
-            onRerun={
-              entry && onRerun && entry.graph === 'turn' && !live && run.runId
-                ? (node, attempt) => {
-                    setSelected(null)
-                    onRerun(entry, node, attempt)
-                  }
-                : undefined
-            }
-          />
-        ) : null}
-      </Sheet>
-      <Sheet open={legend} onClose={() => setLegend(false)} label="Comment lire le parcours">
-        <Legend />
-      </Sheet>
     </div>
   )
 }

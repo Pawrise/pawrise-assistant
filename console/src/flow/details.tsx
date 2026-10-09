@@ -27,6 +27,15 @@ function Tick({ ok }: { ok: boolean }) {
   )
 }
 
+/** Les intentions du tri, dites en clair. */
+const INTENTS: Record<string, string> = {
+  clean: 'question à traiter',
+  diagnosis_request: 'demande de diagnostic ou de médicament',
+  jailbreak: 'détournement',
+  abuse: 'insulte',
+  out_of_scope: 'hors sujet',
+}
+
 /** Les clés techniques des étapes simples, dites en clair. */
 const LABELS: Record<string, string> = {
   template_id: 'Texte envoyé',
@@ -65,9 +74,7 @@ export function Details({ node, data }: { node: string; data: Data }) {
     case 'circuit_breaker':
       return (
         <dl>
-          <Row k="Intention">
-            <Mono>{String(data.intent)}</Mono>
-          </Row>
+          <Row k="Intention">{INTENTS[String(data.intent)] ?? String(data.intent)}</Row>
           <Row k="Confiance">{Number(data.confidence).toFixed(2)}</Row>
           {data.matched ? <Row k="Repéré">« {String(data.matched)} »</Row> : null}
           <Row k="PII masquées">

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { GraphName, Topology, TopologyNode } from '@/api/types'
 import { cn } from '@/lib/utils'
 import type { Attempt, Snapshot } from '@/run/model'
@@ -34,6 +34,8 @@ export function FlowGraph({
   attempts,
   selected,
   onSelect,
+  detail,
+  onClose,
 }: {
   name: GraphName
   topology: Topology
@@ -41,6 +43,9 @@ export function FlowGraph({
   attempts: Attempt[]
   selected: string | null
   onSelect: (id: string) => void
+  /** Le contenu de la bulle de l'étape sélectionnée, accrochée à sa carte. */
+  detail?: ReactNode
+  onClose?: () => void
 }) {
   const grid = useMemo(() => gridLayout(name, topology), [name, topology])
   const edges = useMemo(() => drawnEdges(topology, grid.cells), [topology, grid])
@@ -109,6 +114,43 @@ export function FlowGraph({
     // Les arêtes empruntées se dessinent par-dessus les autres.
     return out.sort((x, y) => Number(x.taken) - Number(y.taken))
   }, [m, edges, grid, snap.taken, snap.active])
+
+  // La bulle se pose à côté de sa carte : à droite du chemin principal, à gauche de la colonne
+  // de droite, ou en dessous, sur toute la largeur, quand la place manque (téléphone).
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  const bubble = useMemo(() => {
+    if (!detail || !selected || !m?.boxes[selected]) return null
+    const b = m.boxes[selected]
+    const width = 340
+    const gap = 14
+    const col = grid.cells[selected]?.col ?? 0
+    if (col === 0 && b.x + b.w + gap + width <= m.width) {
+      return { side: 'right' as const, style: { left: b.x + b.w + gap, top: b.y - 4, width } }
+    }
+    if (col === 1 && b.x - gap - width >= 0) {
+      return { side: 'left' as const, style: { left: b.x - gap - width, top: b.y - 4, width } }
+    }
+    return { side: null, style: { left: 8, right: 8, top: b.y + b.h + 8 } }
+  }, [detail, selected, m, grid])
+
+  useEffect(() => {
+    if (!bubble || !onClose) return
+    const away = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (bubbleRef.current?.contains(t)) return
+      if (Object.values(refs.current).some((el) => el?.contains(t))) return // une autre carte : elle prend la main
+      onClose()
+    }
+    const esc = ({ key }: KeyboardEvent) => {
+      if (key === 'Escape') onClose()
+    }
+    window.addEventListener('mousedown', away)
+    window.addEventListener('keydown', esc)
+    return () => {
+      window.removeEventListener('mousedown', away)
+      window.removeEventListener('keydown', esc)
+    }
+  }, [bubble, onClose])
 
   const lastAttempt = (id: string) => attempts.findLast((a) => a.node === id)
   const two = grid.cols === 2
@@ -214,6 +256,30 @@ export function FlowGraph({
             {RAIL_LABELS[id]}
           </span>
         ))}
+
+      {bubble ? (
+        <div
+          ref={bubbleRef}
+          role="dialog"
+          aria-label="Détail de l’étape"
+          className={cn(
+            'animate-in fade-in zoom-in-95 absolute z-30 rounded-2xl border bg-white p-4 shadow-xl ring-1 ring-zinc-900/5 duration-150',
+            'max-h-[min(70vh,560px)] overflow-y-auto overscroll-contain',
+          )}
+          style={bubble.style}
+        >
+          {bubble.side ? (
+            <span
+              aria-hidden
+              className={cn(
+                'absolute top-5 size-3 rotate-45 border bg-white',
+                bubble.side === 'right' ? '-left-1.5 border-t-0 border-r-0' : '-right-1.5 border-b-0 border-l-0',
+              )}
+            />
+          ) : null}
+          {detail}
+        </div>
+      ) : null}
 
       {Object.entries(grid.cells).map(([id, cell]) => (
         <div
