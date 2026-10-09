@@ -1,34 +1,27 @@
-import { ClipboardCheck, Gauge, ScrollText } from 'lucide-react'
+import { ClipboardCheck, Gauge } from 'lucide-react'
 import type { ComponentProps } from 'react'
-import type { Pet } from '@/api/types'
 import { href } from '@/app/route'
 import { Tabs } from '@/components/Tabs'
 import { EvalsTab } from './EvalsTab'
-import { JournalTab } from './JournalTab'
 import { ScenariosTab } from './ScenariosTab'
 import type { EvalState } from './useEvals'
 
 const TABS = [
   { id: 'evaluations', label: 'Évaluations', icon: Gauge },
   { id: 'scenarios', label: 'Scénarios', icon: ClipboardCheck },
-  { id: 'journal', label: 'Journal d’audit', icon: ScrollText },
 ]
 
-/** Peut-on lui faire confiance ? Des chiffres, des cas de référence, une trace de chaque réponse. */
+/** Peut-on lui faire confiance ? Des chiffres et des cas de référence. */
 export function QualityView({
   tab,
-  pets,
   evals,
   onStartEvals,
   scenarios,
-  journal,
 }: {
   tab: string | null
-  pets: Pet[]
   evals: EvalState
   onStartEvals: () => void
   scenarios: ComponentProps<typeof ScenariosTab>
-  journal: Omit<ComponentProps<typeof JournalTab>, 'pets'>
 }) {
   const current = TABS.some((t) => t.id === tab) ? (tab as string) : 'evaluations'
   return (
@@ -37,7 +30,6 @@ export function QualityView({
       <div className="min-h-0 flex-1">
         {current === 'evaluations' ? <EvalsTab evals={evals} onStart={onStartEvals} /> : null}
         {current === 'scenarios' ? <ScenariosTab {...scenarios} /> : null}
-        {current === 'journal' ? <JournalTab pets={pets} {...journal} /> : null}
       </div>
     </div>
   )

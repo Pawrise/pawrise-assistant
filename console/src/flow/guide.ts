@@ -97,7 +97,7 @@ export const GUIDE: Record<string, StepGuide> = {
     why: 'Mieux vaut ne rien affirmer que risquer une erreur médicale.',
   },
   finalize: {
-    does: 'La seule sortie : joint les sources et le bouton vétérinaire, enregistre le tour dans le journal d’audit.',
+    does: 'La seule sortie : joint les sources et le bouton vétérinaire, enregistre le tour dans le journal d’audit (côté serveur).',
     cases: [{ when: 'Signal d’urgence dans le message', then: '« Contactez un vétérinaire dès maintenant » en tête' }],
     why: 'Rien ne part sans être tracé.',
   },

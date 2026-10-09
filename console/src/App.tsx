@@ -162,8 +162,6 @@ export default function App() {
       ) : (
         <QualityView
           tab={route.tab}
-          pets={info?.pets ?? []}
-          journal={{ entries, topologies, models: info?.step_models }}
           evals={evals.state}
           onStartEvals={evals.start}
           scenarios={{

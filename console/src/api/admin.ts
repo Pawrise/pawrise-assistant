@@ -118,30 +118,6 @@ export type EvalEvent =
   | { type: 'eval_finished'; report: { passed: boolean; validated: boolean; cases: number; kpis: Kpi[] } }
   | { type: 'eval_error'; message: string }
 
-export interface AuditEntry {
-  ts: string | null
-  thread_id: string
-  turn_id: string
-  pet_ref: string
-  input: string
-  faults: string[]
-  path: string[]
-  template_id: string | null
-  escalation: AssistantResponse['escalation']
-  latency_ms: number
-  response_text: string
-  outcome: 'answered' | 'urgent' | 'diagnosis' | 'refusal' | 'careful'
-  intent: string | null
-  small_talk: boolean
-  rejections: { attempt: number; why: string; text: string }[]
-  pii: Record<string, number>
-  citations: { source_id: string; snippet: string }[]
-  ai_calls: number
-  models: string[]
-  cost_eur: number
-  prompt_version: string | null
-}
-
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
     method,
@@ -170,7 +146,6 @@ export const admin = {
   editPet: (ref: string, patch: Partial<PetControls>) => call<PetView>('PATCH', `/debug/pets/${ref}`, patch),
   resetPets: () => call<PetView[]>('POST', '/debug/pets/reset'),
   rules: () => call<Rules>('GET', '/debug/rules'),
-  audit: (limit = 50) => call<AuditEntry[]>('GET', `/debug/audit?limit=${limit}`),
 }
 
 /** Lance les 48 cas ; chaque événement arrive dès qu'un cas est fini. */
