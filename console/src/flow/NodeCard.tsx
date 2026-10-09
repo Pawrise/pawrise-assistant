@@ -1,7 +1,7 @@
-import { Check, Circle, X } from 'lucide-react'
+import { Check, Circle, X, Zap } from 'lucide-react'
 import { forwardRef } from 'react'
 import type { TopologyNode } from '@/api/types'
-import { ACTOR, NODE_ICON } from '@/app/labels'
+import { ACTOR, NODE_ICON, type FaultMark } from '@/app/labels'
 import { cn } from '@/lib/utils'
 import type { NodeSnapshot, NodeView } from '@/run/model'
 import { fmtMs } from '@/run/status'
@@ -53,8 +53,10 @@ export const NodeCard = forwardRef<
     selected: boolean
     onSelect: () => void
     extra?: string | null
+    /** Une panne simulée vise cette étape : dans l'échange affiché, ou au prochain message. */
+    fault?: FaultMark
   }
->(function NodeCard({ meta, snap, selected, onSelect, extra }, ref) {
+>(function NodeCard({ meta, snap, selected, onSelect, extra, fault }, ref) {
   const Icon = NODE_ICON[meta.id]
   const actor = meta.actor ? ACTOR[meta.actor] : null
   const router = meta.kind === 'router'
@@ -121,6 +123,15 @@ export const NodeCard = forwardRef<
               </span>
             ) : null}
             {extra ? <span className="text-[11px] text-zinc-500">{extra}</span> : null}
+            {fault === 'applied' ? (
+              <span className="inline-flex items-center gap-0.5 rounded bg-red-600 px-1.5 py-px text-[10px] font-medium text-white">
+                <Zap className="size-2.5" /> Panne simulée
+              </span>
+            ) : fault === 'armed' ? (
+              <span className="inline-flex items-center gap-0.5 rounded border border-dashed border-red-400 px-1.5 text-[10px] font-medium text-red-700">
+                <Zap className="size-2.5" /> Au prochain message
+              </span>
+            ) : null}
           </span>
         </span>
       </span>

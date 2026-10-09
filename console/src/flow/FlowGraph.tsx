@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { GraphName, Topology, TopologyNode } from '@/api/types'
+import type { FaultMark } from '@/app/labels'
 import { cn } from '@/lib/utils'
 import type { Attempt, Snapshot } from '@/run/model'
 import { NodeCard } from './NodeCard'
@@ -36,6 +37,7 @@ export function FlowGraph({
   onSelect,
   detail,
   onClose,
+  marks = {},
 }: {
   name: GraphName
   topology: Topology
@@ -46,6 +48,7 @@ export function FlowGraph({
   /** Le contenu de la bulle de l'étape sélectionnée, accrochée à sa carte. */
   detail?: ReactNode
   onClose?: () => void
+  marks?: Record<string, FaultMark>
 }) {
   const grid = useMemo(() => gridLayout(name, topology), [name, topology])
   const edges = useMemo(() => drawnEdges(topology, grid.cells), [topology, grid])
@@ -296,6 +299,7 @@ export function FlowGraph({
             selected={selected === id}
             onSelect={() => onSelect(id)}
             extra={extraOf(id, lastAttempt(id))}
+            fault={marks[id]}
           />
         </div>
       ))}

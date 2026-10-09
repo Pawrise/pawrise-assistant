@@ -58,6 +58,27 @@ export const FAULTS: Record<string, { label: string; effect: string }> = {
   draft_ungrounded: { label: 'Brouillon sans source', effect: 'Rejeté à la vérification.' },
 }
 
+/** L'étape que chaque panne simulée touche, pour la marquer dans le parcours. */
+export const FAULT_NODE: Record<string, string> = {
+  classifier_down: 'circuit_breaker',
+  core_api_timeout: 'query_understanding',
+  retriever_down: 'retrieval',
+  reranker_down: 'relevance_filter',
+  llm_down: 'generation',
+  draft_diagnostic: 'generation',
+  draft_ungrounded: 'generation',
+}
+
+export type FaultMark = 'armed' | 'applied'
+
+/** Les étapes marquées : pannes de l'échange affiché (« applied ») ou cochées pour le prochain (« armed »). */
+export function faultMarks(applied: string[], armed: string[]): Record<string, FaultMark> {
+  const out: Record<string, FaultMark> = {}
+  for (const f of armed) if (FAULT_NODE[f]) out[FAULT_NODE[f]] = 'armed'
+  for (const f of applied) if (FAULT_NODE[f]) out[FAULT_NODE[f]] = 'applied'
+  return out
+}
+
 export const ON_ERROR: Record<string, string> = {
   'fail-closed': 'le message reçoit une réponse prudente',
   'fail-open': 'on continue sans elle',
@@ -74,7 +95,7 @@ export function verdict(r: {
   if (r.escalation.urgency === 'high') return { label: 'Urgence', tone: 'urgent' }
   if (t === 'SR-FALLBACK-02') return { label: 'Réponse prudente', tone: 'careful' }
   if (t) return { label: 'Texte fixe', tone: 'fixed' }
-  return { label: 'Vérifiée', tone: 'ok' }
+  return { label: 'Rédigée', tone: 'ok' }
 }
 
 export const TONE: Record<Tone, string> = {

@@ -476,7 +476,8 @@ function Meta({ entry }: { entry: Entry }) {
   const ms = r?.metadata.latency_ms ?? entry.run.attempts.at(-1)?.endTs ?? 0
   return (
     <div className="mt-2 flex items-center gap-2 px-1 text-xs text-zinc-500">
-      <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', TONE[v.tone])}>{v.label}</span>
+      {/* Le cas normal (réponse rédigée puis vérifiée) n'a pas de badge : seuls les cas particuliers en ont un. */}
+      {v.tone !== 'ok' ? <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', TONE[v.tone])}>{v.label}</span> : null}
       <span className="tabular-nums">{fmtMs(ms)}</span>
     </div>
   )

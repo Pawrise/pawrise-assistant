@@ -33,10 +33,8 @@ export function RunSummary({ entry, compact }: { entry: Entry; compact?: boolean
           <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800 ring-1 ring-red-600/20">
             Échec : {run.error}
           </span>
-        ) : v ? (
+        ) : v && v.tone !== 'ok' ? (
           <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium ring-1', TONE[v.tone])}>{v.label}</span>
-        ) : run.summary ? (
-          <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium ring-1', TONE.ok)}>Dossier vérifié</span>
         ) : null}
         {r?.escalation.trigger ? <span className="text-xs text-zinc-600">Vétérinaire proposé</span> : null}
         {entry.faults.length ? (

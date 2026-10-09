@@ -92,7 +92,7 @@ export function ConversationView({
       }}
     />
   )
-  const flow = <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} />
+  const flow = <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} armed={faults} />
 
   if (wide) {
     return (
@@ -143,7 +143,7 @@ export function ConversationView({
     <>
       {chat}
       <Sheet open={sheet} onClose={() => setSheet(false)} label="Parcours" size="full">
-        <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} onClose={() => setSheet(false)} />
+        <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} onClose={() => setSheet(false)} armed={faults} />
       </Sheet>
     </>
   )

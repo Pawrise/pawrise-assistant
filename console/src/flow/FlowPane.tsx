@@ -1,6 +1,7 @@
-import { CircleHelp, X } from 'lucide-react'
+import { CircleHelp, X, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GraphName, Topology, TopologyNode } from '@/api/types'
+import { FAULTS, faultMarks } from '@/app/labels'
 import type { Entry } from '@/app/store'
 import { Popover } from '@/components/Popover'
 import { emptyRun, shapeOf, slots as toSlots, snapshot, totalOf } from '@/run/model'
@@ -19,11 +20,14 @@ export function FlowPane({
   topologies,
   onRerun,
   onClose,
+  armed = [],
 }: {
   entry: Entry | null
   topologies: Partial<Record<GraphName, Topology>>
   onRerun?: (entry: Entry, node: string, attempt: number) => void
   onClose?: () => void
+  /** Pannes cochées pour le prochain message : leurs étapes sont marquées tout de suite. */
+  armed?: string[]
 }) {
   const graph: GraphName = entry?.graph ?? 'turn'
   const topology = topologies[graph]
@@ -135,6 +139,16 @@ export function FlowPane({
         ) : null}
       </header>
 
+      {armed.length ? (
+        <p className="flex items-center gap-2 border-b bg-red-50 px-4 py-2 text-xs text-red-800 lg:px-5">
+          <Zap className="size-3.5 shrink-0" />
+          <span>
+            <span className="font-medium">Au prochain message : </span>
+            {armed.map((f) => FAULTS[f]?.label ?? f).join(' · ')}. Les étapes visées sont marquées.
+          </span>
+        </p>
+      ) : null}
+
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         {topology ? (
           <FlowGraph
@@ -145,6 +159,7 @@ export function FlowPane({
             selected={selected}
             onSelect={(n) => setSelected(n === selected ? null : n)}
             onClose={() => setSelected(null)}
+            marks={faultMarks(entry?.faults ?? [], armed)}
             detail={
               selected && meta[selected] ? (
                 <StepPanel
