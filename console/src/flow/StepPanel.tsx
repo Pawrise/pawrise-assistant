@@ -94,7 +94,8 @@ export function StepPanel({
           {a.data.llm ? <LlmUsage usage={a.data.llm as LlmUsageData} /> : null}
           {a.status ? <Details node={a.node} data={a.data} /> : null}
           <div className="flex flex-wrap items-center gap-2">
-            {onRerun && a.status ? (
+            {/* Relancer une sortie à texte fixe redonnerait le même texte : seules les étapes qui travaillent se relancent. */}
+            {onRerun && a.status && (meta.kind === 'step' || meta.kind === 'router') ? (
               <button
                 type="button"
                 onClick={() => onRerun(a.node, a.attempt)}

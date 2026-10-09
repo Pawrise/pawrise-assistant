@@ -27,6 +27,14 @@ function Tick({ ok }: { ok: boolean }) {
   )
 }
 
+/** Les clés techniques des étapes simples, dites en clair. */
+const LABELS: Record<string, string> = {
+  template_id: 'Texte envoyé',
+  path: 'Chemin',
+  next: 'Suite',
+  pii_redacted: 'Masqué',
+}
+
 /** Un rendu lisible par type de nœud ; le JSON brut reste accessible en dessous. */
 export function Details({ node, data }: { node: string; data: Data }) {
   if (data.forced) {
@@ -230,7 +238,7 @@ export function Details({ node, data }: { node: string; data: Data }) {
       return (
         <dl>
           {Object.entries(data).map(([k, v]) => (
-            <Row key={k} k={k}>
+            <Row key={k} k={LABELS[k] ?? k}>
               <Mono>{Array.isArray(v) ? v.join(' → ') : String(v)}</Mono>
             </Row>
           ))}
