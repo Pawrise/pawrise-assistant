@@ -155,7 +155,6 @@ export default function App() {
           topologies={topologies}
           pets={info?.pets ?? []}
           petRef={petRef}
-          onPet={setPetRef}
           scenarios={scenarios}
           allFaults={allFaults}
           faults={faults}

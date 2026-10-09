@@ -98,7 +98,6 @@ export function FlowPane({
           ) : (
             <div>
               <p className="text-sm font-semibold">Le parcours d’une réponse</p>
-              <p className="mt-0.5 text-sm text-zinc-500">Envoyez un message : chaque étape s’allume en direct.</p>
             </div>
           )}
         </div>

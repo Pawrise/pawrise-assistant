@@ -1,10 +1,11 @@
-import { ArrowUp, ChevronRight, FileText, PawPrint, Siren, SquarePen, Stethoscope, X, Zap } from 'lucide-react'
+import { ArrowUp, ChevronRight, FileText, Siren, SquarePen, Stethoscope, X, Zap } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import type { Pet, Scenario } from '@/api/types'
 import { FAULTS, TONE, verdict } from '@/app/labels'
 import { href } from '@/app/route'
 import { liveStatus, type Entry } from '@/app/store'
 import { HandoffPanel } from '@/components/HandoffPanel'
+import { Logo } from '@/components/Logo'
 import { PetAvatar } from '@/components/PetAvatar'
 import { cn } from '@/lib/utils'
 import { fmtMs } from '@/run/status'
@@ -235,7 +236,6 @@ export function ChatPane({
   entries,
   pets,
   petRef,
-  onPet,
   scenarios,
   allFaults,
   faults,
@@ -253,7 +253,6 @@ export function ChatPane({
   entries: Entry[]
   pets: Pet[]
   petRef: string
-  onPet: (ref: string) => void
   scenarios: Scenario[]
   allFaults: string[]
   faults: string[]
@@ -274,7 +273,8 @@ export function ChatPane({
   const end = useRef<HTMLDivElement>(null)
   const busy = entries.some((e) => e.run.phase === 'running')
   const pet = pets.find((p) => p.pet_ref === petRef)
-  const examples = scenarios.filter((s) => !s.faults.length)
+  // Les exemples ne parlent que de ce chien.
+  const examples = scenarios.filter((s) => !s.faults.length && s.pet_ref === petRef)
 
   const last = entries.at(-1)
   const progress = last ? `${last.id}:${last.run.attempts.length}:${last.run.phase}` : ''
@@ -301,25 +301,16 @@ export function ChatPane({
     <div className="flex h-full min-h-0 flex-col">
       {/* Barre fixe : le chien à qui l'on parle, et repartir d'une conversation neuve. */}
       <div className="flex items-center gap-2 border-b bg-white px-3 py-2 sm:px-4">
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
-          {pets.map((p) => (
-            <button
-              key={p.pet_ref}
-              type="button"
-              onClick={() => onPet(p.pet_ref)}
-              aria-pressed={p.pet_ref === petRef}
-              className={cn(
-                'flex h-9 shrink-0 items-center gap-2 rounded-full border px-2.5 text-sm transition',
-                p.pet_ref === petRef ? 'border-zinc-900 bg-white font-medium shadow-xs' : 'border-transparent text-zinc-500 hover:bg-zinc-50',
-              )}
-            >
-              <PetAvatar petRef={p.pet_ref} name={p.name} className="size-6 text-xs" />
-              {p.name}
-              <span className="hidden text-xs font-normal text-zinc-500 xl:inline">
-                {p.breed}, {p.age_years} ans
+        <div className="flex min-w-0 flex-1 items-center gap-2 px-1 text-sm">
+          {pet ? (
+            <>
+              <PetAvatar petRef={pet.pet_ref} name={pet.name} className="size-7 text-xs" />
+              <span className="font-medium">{pet.name}</span>
+              <span className="truncate text-xs text-zinc-500">
+                {pet.breed}, {pet.age_years} ans
               </span>
-            </button>
-          ))}
+            </>
+          ) : null}
         </div>
         <button
           type="button"
@@ -337,8 +328,8 @@ export function ChatPane({
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5 px-4 py-5 sm:px-6">
           {!entries.length ? (
             <div className="flex flex-col items-center gap-6 pt-4 text-center sm:pt-8">
-              <span className="grid size-14 place-items-center rounded-2xl bg-zinc-900 text-white shadow-lg">
-                <PawPrint className="size-7" />
+              <span className="grid size-14 place-items-center rounded-2xl bg-zinc-900 shadow-lg">
+                <Logo className="size-9" />
               </span>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
@@ -390,7 +381,7 @@ export function ChatPane({
                 )}
                 <div className="flex max-w-[94%] gap-2.5 sm:max-w-[88%]">
                   <span className="grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-white" aria-hidden>
-                    <PawPrint className="size-4" />
+                    <Logo className="size-5" />
                   </span>
                   <div
                     role="button"

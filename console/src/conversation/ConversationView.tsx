@@ -19,7 +19,6 @@ export function ConversationView({
   topologies,
   pets,
   petRef,
-  onPet,
   scenarios,
   allFaults,
   faults,
@@ -34,7 +33,6 @@ export function ConversationView({
   topologies: Partial<Record<GraphName, Topology>>
   pets: Pet[]
   petRef: string
-  onPet: (ref: string) => void
   scenarios: Scenario[]
   allFaults: string[]
   faults: string[]
@@ -70,7 +68,6 @@ export function ConversationView({
       entries={entries}
       pets={pets}
       petRef={petRef}
-      onPet={onPet}
       scenarios={scenarios}
       allFaults={allFaults}
       faults={faults}
