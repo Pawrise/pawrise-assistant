@@ -54,6 +54,18 @@ function KpiCard({ k }: { k: Kpi }) {
   )
 }
 
+/** Les raisons d'échec de chaque cas : le serveur écrit « id: raison ». */
+export function reasonsByCase(kpis: Kpi[]): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const f of kpis.flatMap((k) => k.failures)) {
+    const at = f.indexOf(':')
+    const id = (at < 0 ? f : f.slice(0, at)).trim()
+    const why = at < 0 ? '' : f.slice(at + 1).trim()
+    out.set(id, [...(out.get(id) ?? []), ...(why ? [why] : [])])
+  }
+  return out
+}
+
 function outcome(c: EvalCase): string {
   if (c.urgency === 'high') return 'urgence'
   if (c.template_id) return `texte fixe ${c.template_id}`
@@ -63,7 +75,7 @@ function outcome(c: EvalCase): string {
 export function EvalsTab({ evals, onStart }: { evals: EvalState; onStart: () => void }) {
   const [set, setSet] = useState<EvalCase['set']>('qa_medical')
   const [open, setOpen] = useState<string | null>(null)
-  const failing = new Set(evals.kpis.flatMap((k) => k.failures.map((f) => f.split(':')[0].trim())))
+  const failing = reasonsByCase(evals.kpis)
   const running = evals.phase === 'running'
   const done = evals.cases.length
   const shown = evals.cases.filter((c) => c.set === set)
@@ -144,6 +156,7 @@ export function EvalsTab({ evals, onStart }: { evals: EvalState; onStart: () => 
             <ul className="divide-y overflow-hidden rounded-2xl border bg-white">
               {shown.map((c) => {
                 const bad = failing.has(c.id)
+                const why = failing.get(c.id) ?? []
                 return (
                   <li key={c.id}>
                     <button
@@ -165,6 +178,11 @@ export function EvalsTab({ evals, onStart }: { evals: EvalState; onStart: () => 
                           {c.id} · {outcome(c)}
                           {c.escalate ? ' · vétérinaire' : ''}
                         </span>
+                        {why.map((w) => (
+                          <span key={w} className="mt-0.5 block text-xs text-red-800">
+                            {w}
+                          </span>
+                        ))}
                       </span>
                       <span className="shrink-0 text-xs text-zinc-400 tabular-nums">{fmtMs(c.latency_ms)}</span>
                     </button>
