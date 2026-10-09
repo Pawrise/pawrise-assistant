@@ -175,7 +175,7 @@ export function FlowPane({
         ) : null}
       </Sheet>
       <Sheet open={legend} onClose={() => setLegend(false)} label="Comment lire le parcours">
-        <Legend nodes={topology?.nodes ?? []} />
+        <Legend />
       </Sheet>
     </div>
   )
