@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { fetchFaults, fetchInfo, fetchScenarios, fetchTopology, forkRun, runDebug, runHandoff } from '@/api/client'
 import type { DebugEvent, GraphName, Info, Scenario, Topology } from '@/api/types'
 import { useRoute } from '@/app/route'
@@ -117,14 +117,6 @@ export default function App() {
     )
   }, [])
 
-  const labels = useMemo(
-    () =>
-      Object.fromEntries(
-        (topologies.turn?.nodes ?? []).concat(topologies.handoff?.nodes ?? []).map((n) => [n.id, n.label]),
-      ) as Record<string, string>,
-    [topologies],
-  )
-
   if (loadError) {
     return (
       <div className="grid h-dvh place-items-center bg-zinc-50 p-8 text-center text-sm text-zinc-600">
@@ -161,6 +153,7 @@ export default function App() {
           }}
           onHandoff={handoff}
           onRerun={rerun}
+          models={info?.step_models}
           onReset={() => {
             dispatch({ type: 'clear', origin: 'chat' })
             setFaults([])
@@ -170,7 +163,7 @@ export default function App() {
         <QualityView
           tab={route.tab}
           pets={info?.pets ?? []}
-          labels={labels}
+          journal={{ entries, topologies, models: info?.step_models }}
           evals={evals.state}
           onStartEvals={evals.start}
           scenarios={{

@@ -174,6 +174,33 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
             "reranker": deps.reranker.name,
             "knowledge_editable": kb is not None,
             "pets_editable": isinstance(deps.core_api, InMemoryCoreApi),
+            # Le modèle utilisé à chaque étape, pour la console. Vide en mode sans IA.
+            "step_models": (
+                {
+                    "circuit_breaker": {
+                        "model": settings.llm_model_nano,
+                        "note": "si les règles ne suffisent pas",
+                    },
+                    "query_understanding": {"model": settings.llm_model_nano, "note": None},
+                    "generation": {
+                        "model": settings.llm_model_main,
+                        "note": f"politesse : {settings.llm_model_nano}",
+                    },
+                    "guardrail": {"model": settings.llm_model_nano, "note": "après les règles"},
+                    **(
+                        {
+                            "retrieval": {
+                                "model": kb.embedder,
+                                "note": "pour la recherche par le sens",
+                            }
+                        }
+                        if kb and settings.embedder == "openai"
+                        else {}
+                    ),
+                }
+                if ai
+                else {}
+            ),
             "pets": [
                 {"pet_ref": p.pet_ref, "name": p.name, "breed": p.breed, "age_years": p.age_years}
                 for p in fake_data.PROFILES.values()

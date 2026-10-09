@@ -1,6 +1,6 @@
 import { ChevronDown, RotateCcw, X } from 'lucide-react'
 import { useState } from 'react'
-import type { TopologyNode } from '@/api/types'
+import type { StepModel, TopologyNode } from '@/api/types'
 import { ACTOR, NODE_ICON, fmtEur } from '@/app/labels'
 import { cn } from '@/lib/utils'
 import type { Attempt, NodeSnapshot } from '@/run/model'
@@ -78,12 +78,14 @@ export function StepPanel({
   attempts,
   onClose,
   onRerun,
+  model,
 }: {
   meta: TopologyNode
   snap: NodeSnapshot | undefined
   attempts: Attempt[]
   onClose?: () => void
   onRerun?: (node: string, attempt: number) => void
+  model?: StepModel
 }) {
   const [open, setOpen] = useState(false)
   const Icon = NODE_ICON[meta.id]
@@ -123,6 +125,14 @@ export function StepPanel({
           </button>
         ) : null}
       </header>
+
+      {model ? (
+        <p className="flex flex-wrap items-baseline gap-x-1.5 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs text-violet-900">
+          <span className="font-medium">Modèle</span>
+          <span className="font-mono">{model.model}</span>
+          {model.note ? <span className="text-violet-700/80">· {model.note}</span> : null}
+        </p>
+      ) : null}
 
       {done.length ? (
         <ul className="flex flex-col gap-1.5">

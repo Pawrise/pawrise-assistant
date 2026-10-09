@@ -1,6 +1,6 @@
 import { Check, Circle, X, Zap } from 'lucide-react'
 import { forwardRef } from 'react'
-import type { TopologyNode } from '@/api/types'
+import type { StepModel, TopologyNode } from '@/api/types'
 import { ACTOR, NODE_ICON, type FaultMark } from '@/app/labels'
 import { cn } from '@/lib/utils'
 import type { NodeSnapshot, NodeView } from '@/run/model'
@@ -55,8 +55,10 @@ export const NodeCard = forwardRef<
     extra?: string | null
     /** Une panne simulée vise cette étape : dans l'échange affiché, ou au prochain message. */
     fault?: FaultMark
+    /** Le modèle d'IA utilisé par l'étape. */
+    model?: StepModel
   }
->(function NodeCard({ meta, snap, selected, onSelect, extra, fault }, ref) {
+>(function NodeCard({ meta, snap, selected, onSelect, extra, fault, model }, ref) {
   const Icon = NODE_ICON[meta.id]
   const actor = meta.actor ? ACTOR[meta.actor] : null
   const router = meta.kind === 'router'
@@ -120,6 +122,11 @@ export const NodeCard = forwardRef<
             {actor ? (
               <span className={cn('rounded px-1.5 py-px text-[10px] font-medium', actor.chip)}>
                 {actor.label}
+              </span>
+            ) : null}
+            {model ? (
+              <span className="font-mono text-[10.5px] text-violet-700" title={model.note ?? undefined}>
+                {model.model}
               </span>
             ) : null}
             {extra ? <span className="text-[11px] text-zinc-500">{extra}</span> : null}

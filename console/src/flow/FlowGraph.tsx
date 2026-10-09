@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { GraphName, Topology, TopologyNode } from '@/api/types'
+import type { GraphName, StepModel, Topology, TopologyNode } from '@/api/types'
 import type { FaultMark } from '@/app/labels'
 import { cn } from '@/lib/utils'
 import type { Attempt, Snapshot } from '@/run/model'
@@ -38,6 +38,7 @@ export function FlowGraph({
   detail,
   onClose,
   marks = {},
+  models = {},
 }: {
   name: GraphName
   topology: Topology
@@ -49,6 +50,7 @@ export function FlowGraph({
   detail?: ReactNode
   onClose?: () => void
   marks?: Record<string, FaultMark>
+  models?: Record<string, StepModel>
 }) {
   const grid = useMemo(() => gridLayout(name, topology), [name, topology])
   const edges = useMemo(() => drawnEdges(topology, grid.cells), [topology, grid])
@@ -305,6 +307,7 @@ export function FlowGraph({
             onSelect={() => onSelect(id)}
             extra={extraOf(id, lastAttempt(id))}
             fault={marks[id]}
+            model={models[id]}
           />
         </div>
       ))}

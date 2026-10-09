@@ -222,3 +222,43 @@ def test_audit_lists_the_latest_turns_first(client: TestClient) -> None:
     first = rows[0]
     assert first["ts"] and first["template_id"] == "SR-URG-01"
     assert first["escalation"]["urgency"] == "high" and first["path"][-1] == "finalize"
+
+
+def test_audit_tells_the_outcome_and_what_was_blocked() -> None:
+    """Le journal raconte un tour : son issue, et chaque phrase bloquée une seule fois."""
+    from pawrise_assistant.components.audit import MemoryAuditSink, recent
+
+    sink = MemoryAuditSink()
+    claim = "Il s'agit probablement d'une dysplasie."
+    sink.events.append(
+        {
+            "ts": "2026-10-09T11:00:00+00:00",
+            "input": "Il boite",
+            "trace": [
+                {"node": "redact", "data": {"pii_redacted": {"phone": 1}}},
+                {
+                    "node": "guardrail",
+                    "status": "rejected",
+                    "data": {
+                        "reasons": [
+                            f"langage diagnostique : « {claim} »",
+                            f"affirmation sans source : « {claim} »",
+                        ],
+                        "llm": {"models": ["gpt-5.4-nano"], "cost_eur": 0.0004},
+                    },
+                },
+                {"node": "guardrail", "status": "ok", "data": {"reasons": []}},
+            ],
+            "response": {
+                "response_text": "…",
+                "escalation": {"trigger": True, "urgency": "medium", "reason": "x"},
+                "metadata": {"template_id": "SR-FALLBACK-02", "path": [], "latency_ms": 10},
+            },
+        }
+    )
+    (entry,) = recent(sink)
+    assert entry["outcome"] == "careful"
+    assert entry["rejections"] == [
+        {"attempt": 1, "why": "ressemblait à un diagnostic", "text": claim}
+    ]
+    assert entry["pii"] == {"phone": 1} and entry["ai_calls"] == 1

@@ -92,6 +92,13 @@ export interface Info {
   reranker?: string
   knowledge_editable?: boolean
   pets_editable?: boolean
+  /** Le modèle d'IA de chaque étape qui en utilise un (vide en mode sans IA). */
+  step_models?: Record<string, StepModel>
+}
+
+export interface StepModel {
+  model: string
+  note: string | null
 }
 
 export interface RunRequest {

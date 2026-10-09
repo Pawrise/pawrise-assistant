@@ -1,6 +1,6 @@
 import { MessageCircle, Workflow } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GraphName, Pet, Scenario, Topology } from '@/api/types'
+import type { GraphName, Pet, Scenario, StepModel, Topology } from '@/api/types'
 import { useMedia } from '@/app/route'
 import type { Entry } from '@/app/store'
 import { ChatPane } from '@/chat/ChatPane'
@@ -28,6 +28,7 @@ export function ConversationView({
   onHandoff,
   onRerun,
   onReset,
+  models,
 }: {
   entries: Entry[]
   topologies: Partial<Record<GraphName, Topology>>
@@ -42,6 +43,7 @@ export function ConversationView({
   onHandoff: (e: Entry) => void
   onRerun: (entry: Entry, node: string, attempt: number) => void
   onReset: () => void
+  models?: Record<string, StepModel>
 }) {
   const wide = useMedia('(min-width: 1024px)')
   const tablet = useMedia('(min-width: 768px)')
@@ -92,7 +94,7 @@ export function ConversationView({
       }}
     />
   )
-  const flow = <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} armed={faults} />
+  const flow = <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} armed={faults} models={models} />
 
   if (wide) {
     return (
@@ -143,7 +145,7 @@ export function ConversationView({
     <>
       {chat}
       <Sheet open={sheet} onClose={() => setSheet(false)} label="Parcours" size="full">
-        <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} onClose={() => setSheet(false)} armed={faults} />
+        <FlowPane entry={selected} topologies={topologies} onRerun={onRerun} onClose={() => setSheet(false)} armed={faults} models={models} />
       </Sheet>
     </>
   )

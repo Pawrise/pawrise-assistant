@@ -18,17 +18,17 @@ const TABS = [
 export function QualityView({
   tab,
   pets,
-  labels,
   evals,
   onStartEvals,
   scenarios,
+  journal,
 }: {
   tab: string | null
   pets: Pet[]
-  labels: Record<string, string>
   evals: EvalState
   onStartEvals: () => void
   scenarios: ComponentProps<typeof ScenariosTab>
+  journal: Omit<ComponentProps<typeof JournalTab>, 'pets'>
 }) {
   const current = TABS.some((t) => t.id === tab) ? (tab as string) : 'evaluations'
   return (
@@ -37,7 +37,7 @@ export function QualityView({
       <div className="min-h-0 flex-1">
         {current === 'evaluations' ? <EvalsTab evals={evals} onStart={onStartEvals} /> : null}
         {current === 'scenarios' ? <ScenariosTab {...scenarios} /> : null}
-        {current === 'journal' ? <JournalTab pets={pets} labels={labels} /> : null}
+        {current === 'journal' ? <JournalTab pets={pets} {...journal} /> : null}
       </div>
     </div>
   )

@@ -119,7 +119,7 @@ export type EvalEvent =
   | { type: 'eval_error'; message: string }
 
 export interface AuditEntry {
-  ts: string
+  ts: string | null
   thread_id: string
   turn_id: string
   pet_ref: string
@@ -130,6 +130,16 @@ export interface AuditEntry {
   escalation: AssistantResponse['escalation']
   latency_ms: number
   response_text: string
+  outcome: 'answered' | 'urgent' | 'diagnosis' | 'refusal' | 'careful'
+  intent: string | null
+  small_talk: boolean
+  rejections: { attempt: number; why: string; text: string }[]
+  pii: Record<string, number>
+  citations: { source_id: string; snippet: string }[]
+  ai_calls: number
+  models: string[]
+  cost_eur: number
+  prompt_version: string | null
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {

@@ -1,6 +1,6 @@
 import { CircleHelp, X, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GraphName, Topology, TopologyNode } from '@/api/types'
+import type { GraphName, StepModel, Topology, TopologyNode } from '@/api/types'
 import { FAULTS, faultMarks } from '@/app/labels'
 import type { Entry } from '@/app/store'
 import { Popover } from '@/components/Popover'
@@ -21,6 +21,7 @@ export function FlowPane({
   onRerun,
   onClose,
   armed = [],
+  models = {},
 }: {
   entry: Entry | null
   topologies: Partial<Record<GraphName, Topology>>
@@ -28,6 +29,8 @@ export function FlowPane({
   onClose?: () => void
   /** Pannes cochées pour le prochain message : leurs étapes sont marquées tout de suite. */
   armed?: string[]
+  /** Le modèle d'IA de chaque étape. */
+  models?: Record<string, StepModel>
 }) {
   const graph: GraphName = entry?.graph ?? 'turn'
   const topology = topologies[graph]
@@ -160,6 +163,7 @@ export function FlowPane({
             onSelect={(n) => setSelected(n === selected ? null : n)}
             onClose={() => setSelected(null)}
             marks={faultMarks(entry?.faults ?? [], armed)}
+            models={models}
             detail={
               selected && meta[selected] ? (
                 <StepPanel
@@ -168,6 +172,7 @@ export function FlowPane({
                   snap={snap.nodes[selected]}
                   attempts={shownAttempts.filter((a) => a.node === selected)}
                   onClose={() => setSelected(null)}
+                  model={models[selected]}
                   onRerun={
                     entry && onRerun && entry.graph === 'turn' && !live && run.runId
                       ? (node, attempt) => {
