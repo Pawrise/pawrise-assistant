@@ -17,7 +17,12 @@ from typing import Any
 
 from langgraph.runtime import Runtime
 
-from pawrise_assistant.components.guardrail import GuardrailContext, escalation_rules, is_urgent
+from pawrise_assistant.components.guardrail import (
+    GuardrailContext,
+    escalation_rules,
+    is_urgent,
+    urgent_hit,
+)
 from pawrise_assistant.components.pii import redact as redact_pii
 from pawrise_assistant.components.safe_responses import (
     FALLBACK,
@@ -170,6 +175,13 @@ async def query_understanding(state: AssistantState, runtime: Runtime[Deps]) -> 
 async def gate(state: AssistantState) -> Update:
     """Attend le tri et la reformulation, lancés en parallèle ; le routage est dans `route_gate`."""
     intent = state.get("intent")
+    if hit := urgent_hit(state["user_message"]):
+        # La règle d'urgence passe avant le tri : le dire, sinon le parcours paraît incohérent.
+        return {
+            "trace": _trace(
+                "gate", "redirected", f"Urgence : « {hit} » (règle R-ESC-01, avant le tri)"
+            )
+        }
     if state.get("classifier_failed") or intent is None:
         summary = "Tri en panne : réponse de repli"
     elif intent != "clean":

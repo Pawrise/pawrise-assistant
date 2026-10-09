@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from pawrise_assistant.components.guardrail import GuardrailContext, RuleGuardrail
+from pawrise_assistant.components.guardrail import GuardrailContext, RuleGuardrail, urgent_hit
 from pawrise_assistant.domain.models import Claim, DraftAnswer
 from pawrise_assistant.llm.components import (
     LLMGenerator,
@@ -263,3 +263,8 @@ async def test_a_masked_marker_never_reaches_the_owner() -> None:
     draft = DraftAnswer(response_text=text, claims=[Claim(text=text, source_ids=["message"])])
     verdict = await RuleGuardrail().check(draft, ctx)
     assert not verdict.passed and any("masquée" in r for r in verdict.reasons)
+
+
+def test_urgent_hit_names_the_phrase_shown_in_the_routing_step() -> None:
+    assert urgent_hit("Il a mangé du chocolat mais il a l'air bien") == "mange du chocolat"
+    assert urgent_hit("Une recette au chocolat ?") is None

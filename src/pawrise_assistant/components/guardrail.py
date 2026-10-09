@@ -152,9 +152,14 @@ def is_diagnostic(text: str) -> bool:
     return any(re.search(p, t) for p in _DIAGNOSTIC)
 
 
+def urgent_hit(message: str) -> str | None:
+    """R-ESC-01 seule : le signal d'urgence repéré dans le message, sans contexte ni LLM."""
+    hit = URGENT_SIGNALS.search(fold(message).replace("'", " ").replace("’", " "))
+    return hit.group(0) if hit else None
+
+
 def is_urgent(message: str) -> bool:
-    """R-ESC-01 seule : un signal d'urgence dans le message, sans contexte ni LLM."""
-    return URGENT_SIGNALS.search(fold(message).replace("'", " ").replace("’", " ")) is not None
+    return urgent_hit(message) is not None
 
 
 def escalation_rules(ctx: GuardrailContext) -> Escalation:
