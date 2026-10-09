@@ -170,3 +170,22 @@ async def test_restating_the_owner_needs_no_cited_source(claim: str, grounded: b
     # Le LLM ne peut pas annuler une reprise fidèle du message.
     p = ScriptedProvider({"GuardrailOut": [GuardrailOut(checks=[])]})
     assert (await LLMGuardrail(p).check(draft, ctx)).passed is grounded
+
+
+@pytest.mark.parametrize(
+    ("message", "courtesy"),
+    [
+        ("Merci, c'est rassurant !", True),
+        ("Bonjour", True),
+        ("Ok merci beaucoup", True),
+        ("Merci, mais il vomit depuis ce matin et il ne mange plus rien du tout", False),
+        ("Merci, il dort combien d'heures normalement ?", False),
+    ],
+)
+async def test_courtesy_never_reaches_the_llm_classifier(message: str, courtesy: bool) -> None:
+    """Console, 2026-10-09 : « Merci, c'est rassurant ! » classé hors sujet par le LLM."""
+    from pawrise_assistant.llm.components import IntentOut, LLMIntentClassifier
+
+    wrong = IntentOut(intent="out_of_scope", confidence=0.7, reason="pas une question santé")
+    result = await LLMIntentClassifier(ScriptedProvider({"IntentOut": [wrong]})).classify(message)
+    assert (result.intent == "clean") is courtesy

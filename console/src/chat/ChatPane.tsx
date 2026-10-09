@@ -299,41 +299,42 @@ export function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {/* Barre fixe : le chien à qui l'on parle, et repartir d'une conversation neuve. */}
+      <div className="flex items-center gap-2 border-b bg-white px-3 py-2 sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+          {pets.map((p) => (
+            <button
+              key={p.pet_ref}
+              type="button"
+              onClick={() => onPet(p.pet_ref)}
+              aria-pressed={p.pet_ref === petRef}
+              className={cn(
+                'flex h-9 shrink-0 items-center gap-2 rounded-full border px-2.5 text-sm transition',
+                p.pet_ref === petRef ? 'border-zinc-900 bg-white font-medium shadow-xs' : 'border-transparent text-zinc-500 hover:bg-zinc-50',
+              )}
+            >
+              <PetAvatar petRef={p.pet_ref} name={p.name} className="size-6 text-xs" />
+              {p.name}
+              <span className="hidden text-xs font-normal text-zinc-500 xl:inline">
+                {p.breed}, {p.age_years} ans
+              </span>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={busy || !entries.length}
+          title="Vider la discussion et repartir de zéro"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-40"
+        >
+          <SquarePen className="size-4" />
+          <span className="hidden sm:inline">Nouvelle conversation</span>
+        </button>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5 px-4 py-5 sm:px-6">
-          <div className="flex flex-wrap items-center justify-center gap-1.5">
-            {pets.map((p) => (
-              <button
-                key={p.pet_ref}
-                type="button"
-                onClick={() => onPet(p.pet_ref)}
-                aria-pressed={p.pet_ref === petRef}
-                className={cn(
-                  'flex h-9 items-center gap-2 rounded-full border px-3 text-sm transition',
-                  p.pet_ref === petRef ? 'border-zinc-900 bg-white font-medium shadow-xs' : 'border-transparent text-zinc-500 hover:bg-white',
-                )}
-              >
-                <PetAvatar petRef={p.pet_ref} name={p.name} className="size-6 text-xs" />
-                {p.name}
-                <span className="hidden text-xs font-normal text-zinc-500 sm:inline">
-                  {p.breed}, {p.age_years} ans
-                </span>
-              </button>
-            ))}
-            {entries.length ? (
-              <button
-                type="button"
-                onClick={onReset}
-                disabled={busy}
-                title="Repartir d’une conversation vide"
-                className="ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border bg-white px-3 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
-              >
-                <SquarePen className="size-4" />
-                <span className="hidden sm:inline">Nouvelle conversation</span>
-              </button>
-            ) : null}
-          </div>
-
           {!entries.length ? (
             <div className="flex flex-col items-center gap-6 pt-4 text-center sm:pt-8">
               <span className="grid size-14 place-items-center rounded-2xl bg-zinc-900 text-white shadow-lg">

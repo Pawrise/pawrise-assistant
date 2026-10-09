@@ -21,7 +21,7 @@ from pawrise_assistant.components.guardrail import (
     is_vet_referral,
     restates_message,
 )
-from pawrise_assistant.components.intent import IntentResult, RuleIntentClassifier
+from pawrise_assistant.components.intent import IntentResult, RuleIntentClassifier, is_courtesy
 from pawrise_assistant.components.understanding import RuleQueryUnderstanding, Understanding
 from pawrise_assistant.domain.models import (
     MESSAGE_SOURCE,
@@ -55,6 +55,8 @@ class LLMIntentClassifier:
         ruled = await self.rules.classify(message)
         if ruled.intent != "clean":
             return ruled
+        if is_courtesy(message):  # politesse : pas besoin du LLM, et il s'y trompait
+            return IntentResult("clean", 0.99, "politesse")
         out = await self.provider.parse(
             tier="nano",
             system=prompts.load("intent"),

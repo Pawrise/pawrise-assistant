@@ -51,6 +51,21 @@ _ANIMAL_HINTS = re.compile(
 _OFF_TOPIC = [r"\b(recette|bourse|meteo|horoscope|code python|javascript|politique|elections?)\b"]
 
 
+_COURTESY = re.compile(
+    r"^(merci|bonjour|bonsoir|salut|ok|d accord|super|parfait|genial|top|bonne (journee|soiree))\b"
+)
+
+
+def is_courtesy(message: str) -> bool:
+    """Une formule de politesse courte, sans question : jamais hors sujet.
+
+    Constaté en réel : « Merci, c'est rassurant ! » classé hors sujet par le LLM une fois sur
+    plusieurs, et le propriétaire recevait « Je ne peux répondre qu'aux questions sur la santé… ».
+    """
+    text = fold(message).replace("'", " ").replace("’", " ").strip()
+    return bool(_COURTESY.search(text)) and "?" not in text and len(text.split()) <= 8
+
+
 def _first(patterns: list[str], text: str) -> str | None:
     for p in patterns:
         m = re.search(p, text)

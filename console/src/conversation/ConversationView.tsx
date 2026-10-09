@@ -89,6 +89,8 @@ export function ConversationView({
       onHandoff={onHandoff}
       onReset={() => {
         setSelectedId(null)
+        setPane('chat')
+        setSheet(false)
         onReset()
       }}
     />

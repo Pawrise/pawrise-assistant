@@ -167,7 +167,10 @@ export default function App() {
           }}
           onHandoff={handoff}
           onRerun={rerun}
-          onReset={() => dispatch({ type: 'clear', origin: 'chat' })}
+          onReset={() => {
+            dispatch({ type: 'clear', origin: 'chat' })
+            setFaults([])
+          }}
         />
       ) : route.view === 'knowledge' ? (
         <KnowledgeView tab={route.tab} id={route.id} cited={cited} />
