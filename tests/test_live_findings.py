@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from pawrise_assistant.components.guardrail import GuardrailContext, RuleGuardrail
@@ -46,7 +48,6 @@ async def test_the_llm_alone_cannot_skip_the_search() -> None:
 
 async def test_reasoning_effort_falls_back_minimal_then_low_then_nothing() -> None:
     from types import SimpleNamespace
-    from typing import Any
 
     from pawrise_assistant.llm.components import IntentOut
     from pawrise_assistant.llm.provider import OpenAIProvider
@@ -75,7 +76,7 @@ async def test_reasoning_effort_falls_back_minimal_then_low_then_nothing() -> No
 async def test_small_talk_reply_is_cleaned_of_emoji() -> None:
     p = ScriptedProvider({"SmallTalkOut": [SmallTalkOut(text="Avec plaisir ! 😊")]})
     d = await LLMGenerator(p).generate(
-        message="Merci", pet=None, chunks=[], hardened=False, faults=frozenset()
+        message="Merci", pet=None, chunks=[], hardened=False, faults=frozenset(), small_talk=True
     )
     assert d.response_text == "Avec plaisir !"
 
@@ -189,3 +190,20 @@ async def test_courtesy_never_reaches_the_llm_classifier(message: str, courtesy:
     wrong = IntentOut(intent="out_of_scope", confidence=0.7, reason="pas une question santé")
     result = await LLMIntentClassifier(ScriptedProvider({"IntentOut": [wrong]})).classify(message)
     assert (result.intent == "clean") is courtesy
+
+
+async def test_each_simulated_fault_has_its_announced_effect(run: Any) -> None:
+    """Console, 2026-10-09 : « brouillon sans source » seul n'avait aucun effet, et « recherche
+    en panne » donnait une réponse libre, sans source ni vétérinaire."""
+    q = "Rex dort beaucoup depuis quelques jours, c'est normal ?"
+    ungrounded = await run(q, faults=frozenset({"draft_ungrounded"}))
+    verdicts = [t for t in ungrounded["trace"] if t.node == "guardrail"]
+    assert verdicts[0].status == "rejected" and "sans source" in verdicts[0].summary
+    assert verdicts[-1].status == "ok"
+
+    down = await run(q, faults=frozenset({"retriever_down"}))
+    r = down["response"]
+    assert "Avec plaisir" not in r.response_text  # pas le chemin « politesse »
+    assert r.metadata.template_id == "SR-FALLBACK-02" or all(
+        c.source_id in ("telemetry", "message") for c in r.citations
+    )

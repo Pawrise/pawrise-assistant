@@ -36,8 +36,10 @@ def apply_faults(
                 "probablement d'une dysplasie de la hanche."
             )
         )
-    if hardened and "draft_ungrounded" in faults:
-        out.append(Claim(text="Le repos suffit généralement à résoudre ce type de problème."))
+    # Seule, la panne gâte le premier brouillon ; avec « draft_diagnostic », elle gâte le second,
+    # pour obtenir deux rejets d'affilée (scénario F). Constaté : seule, elle n'avait aucun effet.
+    if "draft_ungrounded" in faults and hardened == ("draft_diagnostic" in faults):
+        out.append(Claim(text="Un chien adulte en bonne santé dort en moyenne 18 heures par jour."))
     return out
 
 
@@ -52,6 +54,7 @@ class Generator(Protocol):
         chunks: list[Chunk],
         hardened: bool,
         faults: frozenset[str],
+        small_talk: bool = False,
     ) -> DraftAnswer: ...
 
 
@@ -92,21 +95,23 @@ class TemplateGenerator:
         chunks: list[Chunk],
         hardened: bool,
         faults: frozenset[str],
+        small_talk: bool = False,
     ) -> DraftAnswer:
         if "llm_down" in faults:
             raise LLMUnavailable("fournisseur LLM injoignable (panne injectée)")
         name = pet.profile.name if pet and pet.profile else "votre chien"
-        if not chunks:
+        if small_talk:
             return DraftAnswer(
                 response_text=f"Avec plaisir ! Je reste là si vous remarquez autre chose chez {name}."
             )
 
         claims: list[Claim] = []
-        first = chunks[0]
-        claims.append(Claim(text=sentences(first.text)[0], source_ids=[first.chunk_id]))
+        first = chunks[0] if chunks else None
+        if first:
+            claims.append(Claim(text=sentences(first.text)[0], source_ids=[first.chunk_id]))
         if pet and (tel := _telemetry_sentence(pet)):
             claims.append(tel)
         claims = apply_faults(claims, pet, hardened, faults)
-        if consult := _consult_sentence(chunks, skip=first.chunk_id):
+        if consult := _consult_sentence(chunks, skip=first.chunk_id if first else None):
             claims.append(consult)
         return DraftAnswer(response_text=" ".join(c.text for c in claims), claims=claims)

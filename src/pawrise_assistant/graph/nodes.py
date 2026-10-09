@@ -231,6 +231,7 @@ async def generation(state: AssistantState, runtime: Runtime[Deps]) -> Update:
         chunks=state.get("context_chunks", []) if state.get("needs_retrieval") else [],
         hardened=hardened,
         faults=deps.faults,
+        small_talk=not state.get("needs_retrieval", True),
     )
     return {
         "draft": draft,

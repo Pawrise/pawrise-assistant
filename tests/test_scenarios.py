@@ -76,7 +76,7 @@ async def test_flow_f_two_rejections_end_in_fallback(run: Any) -> None:
     rejections = [t for t in out["trace"] if t.node == "guardrail"]
     assert [t.status for t in rejections] == ["rejected", "rejected"]
     assert "diagnostique" in rejections[0].summary
-    assert "diagnostique" in rejections[1].summary  # « le repos suffit » est un avis de soin
+    assert "sans source" in rejections[1].summary  # un chiffre inventé, sans passage
 
 
 async def test_one_rejection_then_pass_on_hardened_retry(run: Any) -> None:

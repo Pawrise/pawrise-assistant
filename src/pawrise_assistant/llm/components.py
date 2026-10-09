@@ -151,10 +151,14 @@ class LLMGenerator:
         chunks: list[Chunk],
         hardened: bool,
         faults: frozenset[str],
+        small_talk: bool = False,
     ) -> DraftAnswer:
         if "llm_down" in faults:
             raise LLMUnavailable("fournisseur LLM injoignable (panne injectée)")
-        if not chunks:  # échange courant : pas de passage, donc pas d'affirmation à sourcer
+        # Échange courant (merci, bonjour) : rien à affirmer, donc rien à sourcer. Une question
+        # santé sans passage trouvé ne prend jamais ce chemin : elle ne peut citer que le collier
+        # et le message, sinon elle est rejetée (constaté : recherche en panne → réponse libre).
+        if small_talk:
             name = pet.profile.name if pet and pet.profile else None
             reply = await self.provider.parse(
                 tier="nano",
