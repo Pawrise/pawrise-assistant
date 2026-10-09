@@ -38,7 +38,8 @@ export function FlowPane({
   const [selected, setSelected] = useState<string | null>(null)
   const [legend, setLegend] = useState(false)
   const cursorRef = useRef(0)
-  const live = run.phase === 'running'
+  // Un message envoyé mais pas encore démarré côté serveur se suit déjà en direct.
+  const live = run.phase === 'running' || (run.phase === 'idle' && entry !== null)
 
   // En direct, l'horloge du tour fait avancer les étapes en cours, même sans nouvel événement.
   const slots = useMemo(() => toSlots(run, live ? cursor : 0), [run, live, cursor])
@@ -55,12 +56,11 @@ export function FlowPane({
   const shownId = entry?.id ?? null
   useEffect(() => {
     setSelected(null)
-    // Un message tout juste envoyé n'a pas encore démarré côté serveur (« idle ») : il se suit en direct.
-    const following = run.phase === 'running' || run.phase === 'idle'
-    const start = following ? 0 : Number.MAX_SAFE_INTEGER
-    cursorRef.current = start
-    setCursor(start)
-    setPlaying(following)
+    // Chaque échange affiché se joue depuis le début : en direct s'il tourne encore, en relecture
+    // sinon. C'est le mode par défaut, que le message soit nouveau ou une ancienne réponse.
+    cursorRef.current = 0
+    setCursor(0)
+    setPlaying(Boolean(shownId))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seulement au changement d'échange
   }, [shownId])
 
