@@ -33,7 +33,7 @@ curl -N http://127.0.0.1:8100/v1/turns/stream -H 'content-type: application/json
 
 ## La console
 
-Trois vues, sur téléphone, tablette et ordinateur, et un mode démo :
+Trois vues, sur téléphone, tablette et ordinateur :
 
 - **Conversation** : l'assistant tel que le propriétaire le voit, et à côté son parcours en
   direct (qui fait chaque étape : IA, règle, recherche, texte fixe). Pannes simulables depuis la
@@ -43,8 +43,6 @@ Trois vues, sur téléphone, tablette et ordinateur, et un mode démo :
   règles, textes fixes et consignes de l'IA.
 - **Qualité** : les 48 cas d'évaluation lancés en direct avec leurs indicateurs, les scénarios de
   référence, le journal d'audit.
-- **Démo** : le fil d'une présentation, fonctionnalité par fonctionnalité, avec ce qu'il faut
-  observer et un bouton pour la montrer.
 
 ## Configuration
 

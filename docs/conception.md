@@ -482,7 +482,7 @@ que le corpus d'amorce est en place (fin du lot 4).
 à l'assistant, sans `dialog`. Elle sert au debug, à la démo de soutenance et, plus tard, à la revue
 clinique.
 
-### 8.1 Trois vues et un mode démo
+### 8.1 Trois vues
 
 **Refonte du 2026-10-08, en deux temps.** La première console (graphe ELK, chronologie,
 inspecteur sur un seul écran) était illisible pour un PO et inutilisable sur téléphone. La
@@ -495,10 +495,6 @@ montrer et s'y expliquer.
 | **Conversation** | Que répond l'assistant, et comment ? | La discussion et le parcours en direct, côte à côte sur ordinateur ; bascule Discussion/Parcours sur tablette ; bandeau d'avancement et parcours plein écran sur téléphone. Pannes simulables depuis la saisie. Une source citée mène à son passage dans Connaissances |
 | **Connaissances** | Sur quoi s'appuie-t-il ? | Fiches santé éditables (modifier, désactiver, ajouter, réinitialiser — ré-indexé aussitôt) ; test de recherche (rangs par les mots, par le sens, fusion, pertinence) ; chiens et collier modifiables ; règles, textes fixes et consignes de l'IA en lecture seule |
 | **Qualité** | Peut-on lui faire confiance ? | Les 48 cas lancés en direct et leurs indicateurs face aux cibles ; les scénarios de référence et leur résultat attendu ; le journal d'audit |
-
-Le **mode démo** déroule une présentation en quatre temps (répondre juste, se protéger, justifier,
-prouver) : pour chaque fonctionnalité, ce qu'il faut observer et un bouton qui la déclenche. Il
-sert aussi de liste de couverture des fonctionnalités backend.
 
 Le parcours se dessine sur une grille fixe : chemin principal en colonne, branches parallèles sur
 la même rangée (« En même temps »), textes fixes regroupés à droite. Chaque étape dit qui la fait

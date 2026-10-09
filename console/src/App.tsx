@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { fetchFaults, fetchInfo, fetchScenarios, fetchTopology, forkRun, runDebug, runHandoff } from '@/api/client'
 import type { DebugEvent, GraphName, Info, Scenario, Topology } from '@/api/types'
-import { go, useRoute } from '@/app/route'
+import { useRoute } from '@/app/route'
 import { newId, storeReduce, type Entry, type NewEntry } from '@/app/store'
-import { Sheet } from '@/components/Sheet'
 import { Shell } from '@/components/Shell'
 import { ConversationView } from '@/conversation/ConversationView'
-import { DemoGuide, type DemoActions } from '@/demo/DemoGuide'
 import { KnowledgeView } from '@/knowledge/KnowledgeView'
 import { QualityView } from '@/quality/QualityView'
 import { useEvals } from '@/quality/useEvals'
@@ -22,7 +20,6 @@ export default function App() {
   const [faults, setFaults] = useState<string[]>([])
   const [topologies, setTopologies] = useState<Partial<Record<GraphName, Topology>>>({})
   const [petRef, setPetRef] = useState('pet_demo_rex')
-  const [demo, setDemo] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const evals = useEvals()
   const entriesRef = useRef(entries)
@@ -133,31 +130,6 @@ export default function App() {
     return out
   }, [entries])
 
-  const demoActions = useMemo<DemoActions>(
-    () => ({
-      scenario: (id, extra) => {
-        const s = scenarios.find((x) => x.id === id)
-        if (!s) return
-        setPetRef(s.pet_ref)
-        go('conversation')
-        ask(s.user_message, { pet: s.pet_ref, alert: s.alert_context, scenarioId: s.id, faults: extra })
-      },
-      say: (message, opts) => {
-        go('conversation')
-        ask(message, { pet: opts?.pet ?? petRef, faults: opts?.faults })
-      },
-      handoff: () => {
-        const from = entriesRef.current.findLast((e) => e.origin === 'chat' && e.run.response?.escalation.trigger)
-        if (!from) return false
-        go('conversation')
-        handoff(from)
-        return true
-      },
-      open: (view, tab, id) => go(view, tab, id),
-    }),
-    [scenarios, ask, handoff, petRef],
-  )
-
   if (loadError) {
     return (
       <div className="grid h-dvh place-items-center bg-zinc-50 p-8 text-center text-sm text-zinc-600">
@@ -176,7 +148,7 @@ export default function App() {
   const live = entries.some((e) => e.run.phase === 'running')
 
   return (
-    <Shell view={route.view} live={live} onDemo={() => setDemo(true)}>
+    <Shell view={route.view} live={live}>
       {route.view === 'conversation' ? (
         <ConversationView
           entries={chat}
@@ -217,9 +189,6 @@ export default function App() {
           }}
         />
       )}
-      <Sheet open={demo} onClose={() => setDemo(false)} label="Démo guidée">
-        <DemoGuide actions={demoActions} onDone={() => setDemo(false)} />
-      </Sheet>
     </Shell>
   )
 }
