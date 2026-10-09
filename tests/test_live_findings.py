@@ -207,3 +207,27 @@ async def test_each_simulated_fault_has_its_announced_effect(run: Any) -> None:
     assert r.metadata.template_id == "SR-FALLBACK-02" or all(
         c.source_id in ("telemetry", "message") for c in r.citations
     )
+
+
+async def test_restating_the_owner_is_neither_unsourced_nor_a_diagnosis() -> None:
+    """Console, 2026-10-09 : 1 tour sur 5 de « Rex dort beaucoup » finissait en réponse prudente."""
+    from pawrise_assistant.llm.components import CheckOut, GuardrailOut, LLMGuardrail
+
+    msg = "Rex dort beaucoup depuis quelques jours, c'est normal ?"
+    claims = [
+        "Vous observez que Rex dort beaucoup depuis quelques jours.",
+        "Vous dites que Rex dort beaucoup depuis quelques jours.",
+    ]
+    ctx = GuardrailContext(user_message=msg, chunks=[], pet=None, alert=None)
+    draft = DraftAnswer(
+        response_text=" ".join(claims),
+        claims=[Claim(text=t, source_ids=["message"]) for t in claims],
+    )
+    wrong = GuardrailOut(
+        checks=[
+            CheckOut(index=0, supported=False, diagnostic=False),
+            CheckOut(index=1, supported=True, diagnostic=True),
+        ]
+    )
+    verdict = await LLMGuardrail(ScriptedProvider({"GuardrailOut": [wrong]})).check(draft, ctx)
+    assert verdict.passed, verdict.reasons

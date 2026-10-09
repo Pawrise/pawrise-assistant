@@ -237,7 +237,15 @@ class LLMGuardrail:
                     or is_vet_referral(r.text)
                     or restates_message(r.text, ctx.user_message)
                 ),
-                diagnostic=r.diagnostic or (i in llm and llm[i].diagnostic),
+                # Reprendre le propriétaire n'est pas diagnostiquer : le LLM ne peut pas en décider
+                # autrement (constaté : « Vous dites que Rex dort beaucoup » jugé diagnostic). Les
+                # règles de diagnostic, elles, s'appliquent toujours (r.diagnostic).
+                diagnostic=r.diagnostic
+                or (
+                    i in llm
+                    and llm[i].diagnostic
+                    and not restates_message(r.text, ctx.user_message)
+                ),
                 source_ids=r.source_ids,
             )
             for i, r in enumerate(ruled.checks)

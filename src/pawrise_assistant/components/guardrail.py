@@ -86,6 +86,25 @@ _REPORTING = frozenset(
         "votre",
         "vos",
         "message",
+        # Verbes de reprise vus en réel (« Vous observez que… »), et leurs voisins.
+        "observez",
+        "observe",
+        "remarquez",
+        "remarque",
+        "constatez",
+        "constate",
+        "notez",
+        "decrivez",
+        "decrit",
+        "parlez",
+        "ecrivez",
+        "trouvez",
+        "voyez",
+        "racontez",
+        "rapportez",
+        "le",
+        "la",
+        "les",
     ]
 )
 
