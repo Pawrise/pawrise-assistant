@@ -27,6 +27,34 @@ function Tick({ ok }: { ok: boolean }) {
   )
 }
 
+/** Les types de données personnelles masquées, dits en clair. */
+const PII: Record<string, string> = {
+  email: 'e-mail',
+  phone: 'téléphone',
+  iban: 'IBAN',
+  nir: 'n° de sécurité sociale',
+  postcode: 'code postal',
+}
+
+/** « 1 téléphone, 1 e-mail », ou « aucune ». */
+function piiText(v: unknown): string {
+  const found = Object.entries((v as Record<string, number>) ?? {}).filter(([, n]) => n)
+  return found.length ? found.map(([k, n]) => `${n} ${PII[k] ?? k}`).join(', ') : 'aucune'
+}
+
+/** N'importe quelle valeur, lisible : jamais « [object Object] ». */
+function show(v: unknown, sep = ', '): string {
+  if (v === null || v === undefined || v === '') return '—'
+  if (Array.isArray(v)) return v.map((x) => show(x)).join(sep)
+  if (typeof v === 'object') {
+    return Object.entries(v as Record<string, unknown>)
+      .map(([k, x]) => `${LABELS[k] ?? k} : ${show(x)}`)
+      .join(sep)
+  }
+  if (typeof v === 'boolean') return v ? 'oui' : 'non'
+  return String(v)
+}
+
 /** Les intentions du tri, dites en clair. */
 const INTENTS: Record<string, string> = {
   clean: 'question à traiter',
@@ -77,11 +105,7 @@ export function Details({ node, data }: { node: string; data: Data }) {
           <Row k="Intention">{INTENTS[String(data.intent)] ?? String(data.intent)}</Row>
           <Row k="Confiance">{Number(data.confidence).toFixed(2)}</Row>
           {data.matched ? <Row k="Repéré">« {String(data.matched)} »</Row> : null}
-          <Row k="PII masquées">
-            {Object.keys((data.pii_redacted as Data) ?? {}).length
-              ? JSON.stringify(data.pii_redacted)
-              : 'aucune'}
-          </Row>
+          <Row k="Données masquées">{piiText(data.pii_redacted)}</Row>
         </dl>
       )
     case 'query_understanding': {
@@ -244,11 +268,13 @@ export function Details({ node, data }: { node: string; data: Data }) {
     default:
       return (
         <dl>
-          {Object.entries(data).map(([k, v]) => (
-            <Row key={k} k={LABELS[k] ?? k}>
-              <Mono>{Array.isArray(v) ? v.join(' → ') : String(v)}</Mono>
-            </Row>
-          ))}
+          {Object.entries(data)
+            .filter(([k]) => k !== 'llm') // l'usage de l'IA est montré à part
+            .map(([k, v]) => (
+              <Row key={k} k={LABELS[k] ?? k}>
+                {k === 'pii_redacted' ? piiText(v) : <Mono>{show(v, k === 'path' ? ' → ' : ', ')}</Mono>}
+              </Row>
+            ))}
         </dl>
       )
   }

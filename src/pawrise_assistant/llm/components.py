@@ -19,12 +19,14 @@ from pawrise_assistant.components.guardrail import (
     GuardrailContext,
     RuleGuardrail,
     is_vet_referral,
+    leaks_marker,
     restates_message,
 )
 from pawrise_assistant.components.intent import IntentResult, RuleIntentClassifier, is_courtesy
 from pawrise_assistant.components.understanding import RuleQueryUnderstanding, Understanding
 from pawrise_assistant.domain.models import (
     MESSAGE_SOURCE,
+    OPENING_SOURCE,
     TELEMETRY_SOURCE,
     AlertContext,
     Chunk,
@@ -92,7 +94,9 @@ class LLMQueryUnderstanding:
         )
         # On cherche avec les mots-clés du LLM ET ceux du propriétaire : la recherche lexicale
         # rate les fiches quand la reformulation s'éloigne trop des mots d'origine.
-        query = f"{out.canonical_query} · {message}"
+        # Les marqueurs de masquage ([phone]…) n'aident pas à chercher : on les retire.
+        said = re.sub(r"\[(email|iban|nir|phone|postcode)\]", " ", message)
+        query = f"{out.canonical_query} · {' '.join(said.split())}"
         if alert is not None:  # flux B : le contexte de l'alerte est toujours chargé
             return Understanding(query, True, 7, 7)
         # Sauter la recherche, c'est répondre sans source : il faut que les règles ET le LLM
@@ -111,6 +115,8 @@ class ClaimOut(BaseModel):
 
 
 class DraftOut(BaseModel):
+    opening: str | None = None
+    """Une courte phrase d'accueil, sans information médicale."""
     claims: list[ClaimOut] = Field(max_length=5)
     suggest_vet: bool
 
@@ -178,9 +184,10 @@ class LLMGenerator:
             schema=DraftOut,
             max_tokens=500,
         )
-        claims = apply_faults(
-            [Claim(text=c.text, source_ids=c.source_ids) for c in out.claims], pet, hardened, faults
-        )
+        drafted = [Claim(text=c.text, source_ids=c.source_ids) for c in out.claims]
+        if out.opening and out.opening.strip():
+            drafted.insert(0, Claim(text=out.opening.strip(), source_ids=[OPENING_SOURCE]))
+        claims = apply_faults(drafted, pet, hardened, faults)
         return DraftAnswer(response_text=" ".join(c.text for c in claims), claims=claims)
 
 
@@ -209,6 +216,10 @@ class LLMGuardrail:
             return ruled
         sources = {c.chunk_id: c.text for c in ctx.chunks}
         sources[MESSAGE_SOURCE] = ctx.user_message
+        sources[OPENING_SOURCE] = (
+            "(phrase d'accueil : supported seulement si elle ne dit rien de la santé du chien, "
+            "ne donne aucun conseil et aucun chiffre)"
+        )
         if ctx.pet and ctx.pet.telemetry:
             sources[TELEMETRY_SOURCE] = ctx.pet.describe()
         lines = []
@@ -251,6 +262,7 @@ class LLMGuardrail:
             for i, r in enumerate(ruled.checks)
         ]
         reasons = [f"langage diagnostique : « {c.text} »" for c in checks if c.diagnostic]
+        reasons += [f"donnée masquée citée : « {c.text} »" for c in checks if leaks_marker(c.text)]
         reasons += [
             f"affirmation non appuyée par sa source : « {c.text} »"
             for c in checks

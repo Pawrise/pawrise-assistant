@@ -18,6 +18,8 @@ TELEMETRY_SOURCE = "telemetry"
 """Identifiant de source réservé : un claim ancré sur les données du collier, pas sur le corpus."""
 
 MESSAGE_SOURCE = "message"
+OPENING_SOURCE = "accueil"
+"""Identifiant de source réservé : la phrase d'accueil, qui ne doit rien affirmer sur le chien."""
 """Identifiant de source réservé : un claim qui reprend ce que le propriétaire a dit lui-même."""
 
 

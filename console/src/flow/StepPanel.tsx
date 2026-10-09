@@ -1,11 +1,50 @@
 import { ChevronDown, RotateCcw, X } from 'lucide-react'
 import { useState } from 'react'
 import type { TopologyNode } from '@/api/types'
-import { ACTOR, NODE_ICON, ON_ERROR, fmtEur } from '@/app/labels'
+import { ACTOR, NODE_ICON, fmtEur } from '@/app/labels'
 import { cn } from '@/lib/utils'
 import type { Attempt, NodeSnapshot } from '@/run/model'
 import { fmtMs } from '@/run/status'
 import { Details, type LlmUsageData } from './details'
+import { GUIDE } from './guide'
+
+/** L'explication d'une étape : ce qu'elle fait, ses cas, pourquoi, et en cas de panne. */
+function Guide({ id, fallback }: { id: string; fallback: string }) {
+  const g = GUIDE[id]
+  if (!g) return <p className="text-sm leading-snug text-zinc-600">{fallback}</p>
+  return (
+    <div className="flex flex-col gap-2.5 text-sm leading-snug">
+      <p className="text-zinc-800">{g.does}</p>
+      {g.cases?.length ? (
+        <ul className="flex flex-col gap-1">
+          {g.cases.map((c) => (
+            <li key={c.when} className="flex gap-2 text-[13px]">
+              <span className="mt-1.5 size-1 shrink-0 rounded-full bg-zinc-400" />
+              <span>
+                <span className="text-zinc-800">{c.when}</span>
+                {c.then ? <span className="text-zinc-500"> → {c.then}</span> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="text-[13px] text-zinc-500">
+        <span className="font-medium text-zinc-700">Pourquoi : </span>
+        {g.why}
+      </p>
+      {g.fail ? (
+        <p
+          className={cn(
+            'w-fit rounded-md px-2 py-1 text-xs',
+            g.fail.kind === 'closed' ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-900',
+          )}
+        >
+          En panne : {g.fail.text}
+        </p>
+      ) : null}
+    </div>
+  )
+}
 
 function stateLine(snap: NodeSnapshot | undefined): { text: string; cls: string } {
   switch (snap?.view) {
@@ -95,7 +134,7 @@ export function StepPanel({
           ))}
         </ul>
       ) : (
-        <p className="text-sm leading-snug text-zinc-600">{meta.role}</p>
+        <Guide id={meta.id} fallback={meta.role} />
       )}
 
       {models.length ? (
@@ -118,10 +157,7 @@ export function StepPanel({
 
       {open ? (
         <div className="animate-in fade-in flex flex-col gap-3 border-t pt-3 duration-200">
-          <p className="text-xs leading-relaxed text-zinc-500">
-            {meta.role}
-            {meta.on_error ? ` En panne : ${ON_ERROR[meta.on_error] ?? meta.on_error}.` : ''}
-          </p>
+          <Guide id={meta.id} fallback={meta.role} />
           {done.map((a) => (
             <section key={`${a.node}-${a.attempt}`} className="flex flex-col gap-2">
               {done.length > 1 ? <p className="text-xs font-medium text-zinc-500">{a.attempt}ᵉ passage</p> : null}

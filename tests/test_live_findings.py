@@ -231,3 +231,35 @@ async def test_restating_the_owner_is_neither_unsourced_nor_a_diagnosis() -> Non
     )
     verdict = await LLMGuardrail(ScriptedProvider({"GuardrailOut": [wrong]})).check(draft, ctx)
     assert verdict.passed, verdict.reasons
+
+
+@pytest.mark.parametrize(
+    ("opening", "passed"),
+    [
+        ("Je comprends que ça vous interroge.", True),
+        ("Merci pour votre question, regardons cela ensemble.", True),
+        ("Je comprends, Rex a probablement une infection.", False),
+        ("Rex dort 18 heures par jour, c'est normal.", False),
+        ("Je comprends " + "vraiment " * 20 + "votre inquiétude.", False),
+    ],
+)
+async def test_a_warm_opening_needs_no_source_but_says_nothing_medical(
+    opening: str, passed: bool
+) -> None:
+    """Console, 2026-10-09 : les réponses lisaient comme un récapitulatif, sans chaleur."""
+    from pawrise_assistant.domain.models import OPENING_SOURCE
+
+    ctx = GuardrailContext(user_message="Rex dort beaucoup", chunks=[], pet=None, alert=None)
+    draft = DraftAnswer(
+        response_text=opening, claims=[Claim(text=opening, source_ids=[OPENING_SOURCE])]
+    )
+    assert (await RuleGuardrail().check(draft, ctx)).passed is passed
+
+
+async def test_a_masked_marker_never_reaches_the_owner() -> None:
+    """Console, 2026-10-09 : « je garde votre demande de rappel au [phone] »."""
+    text = "Je garde aussi votre demande de rappel au [phone]."
+    ctx = GuardrailContext(user_message="Rappelez-moi au [phone]", chunks=[], pet=None, alert=None)
+    draft = DraftAnswer(response_text=text, claims=[Claim(text=text, source_ids=["message"])])
+    verdict = await RuleGuardrail().check(draft, ctx)
+    assert not verdict.passed and any("masquée" in r for r in verdict.reasons)

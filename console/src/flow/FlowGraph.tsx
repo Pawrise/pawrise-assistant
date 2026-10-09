@@ -136,6 +136,11 @@ export function FlowGraph({
     return { side: null, style: { left: 8, right: 8, top: b.y + b.h + 8 } }
   }, [detail, selected, m, grid])
 
+  // Une bulle ouverte près du bas du graphe défile pour être lue en entier.
+  useEffect(() => {
+    if (bubble) bubbleRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [bubble, selected])
+
   useEffect(() => {
     if (!bubble || !onClose) return
     const away = (e: MouseEvent) => {

@@ -18,6 +18,7 @@ from typing import Protocol
 from pawrise_assistant.components.text import fold, sentences, stem, tokens
 from pawrise_assistant.domain.models import (
     MESSAGE_SOURCE,
+    OPENING_SOURCE,
     TELEMETRY_SOURCE,
     AlertContext,
     Chunk,
@@ -120,6 +121,27 @@ def restates_message(text: str, message: str) -> bool:
     return bool(words) and all(w in said for w in words) and not is_diagnostic(text)
 
 
+_PII_MARKER = re.compile(r"\[(email|iban|nir|phone|postcode)\]")
+
+
+def leaks_marker(text: str) -> bool:
+    """Un marqueur de masquage laissé dans la réponse.
+
+    Constaté en réel : « je garde votre demande de rappel au [phone] » ; le propriétaire voyait le
+    marqueur interne, et l'assistant promettait un rappel qu'il ne peut pas faire.
+    """
+    return bool(_PII_MARKER.search(text))
+
+
+def is_opening(text: str) -> bool:
+    """Une phrase d'accueil acceptable : courte, sans chiffre, sans diagnostic.
+
+    Elle rend la réponse humaine (« Je comprends que ça vous interroge. ») sans rien affirmer ;
+    le LLM de vérification contrôle en plus qu'elle ne dit rien de la santé du chien.
+    """
+    return len(text.split()) <= 18 and not re.search(r"\d", text) and not is_diagnostic(text)
+
+
 def is_vet_referral(text: str) -> bool:
     """Une invitation à consulter : pas besoin de source, tant qu'elle n'affirme rien sur le chien."""
     return bool(_VET_REFERRAL.search(fold(text))) and not is_diagnostic(text)
@@ -192,6 +214,7 @@ class RuleGuardrail:
             ClaimCheck(
                 text=c.text,
                 grounded=(bool(c.source_ids) and set(c.source_ids) <= allowed)
+                or (c.source_ids == [OPENING_SOURCE] and is_opening(c.text))
                 or is_vet_referral(c.text)
                 or restates_message(c.text, ctx.user_message),
                 diagnostic=is_diagnostic(c.text),
@@ -200,6 +223,7 @@ class RuleGuardrail:
             for c in draft.claims
         ]
         reasons = [f"langage diagnostique : « {c.text} »" for c in checks if c.diagnostic]
+        reasons += [f"donnée masquée citée : « {c.text} »" for c in checks if leaks_marker(c.text)]
         reasons += [f"affirmation sans source : « {c.text} »" for c in checks if not c.grounded]
         if not draft.response_text.strip():
             reasons.append("réponse vide")
