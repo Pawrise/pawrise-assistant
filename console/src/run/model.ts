@@ -117,42 +117,39 @@ export function reduce(state: RunState, e: RunAction): RunState {
 
 // — Chronologie d'affichage —
 
-/** Durée minimale d'un passage à l'écran : les nœuds de dev durent quelques millisecondes. */
-export const MIN_SLOT_MS = 150
-
 export interface Slot {
   attempt: Attempt
   start: number
   end: number
-  /** 0, ou 1 pour la seconde de deux branches qui tournent en même temps. */
+  /** La ligne de la chronologie : deux étapes qui tournent en même temps ne partagent pas la même. */
   lane: number
 }
 
 /**
- * Les passages sont placés bout à bout, sauf deux branches lancées en même temps côté serveur :
- * elles partagent le même départ, sur deux lignes. En pas à pas, chaque passage dure au moins
- * MIN_SLOT_MS à l'écran ; sinon, sa vraie durée (1 ms minimum pour rester visible).
+ * Chaque passage à sa place réelle, en millisecondes depuis le début du tour (horloge du serveur).
+ * Un passage encore en cours s'étend jusqu'au dernier événement reçu. Deux passages qui se
+ * chevauchent vont sur deux lignes : c'est ce qui montre « en même temps », y compris en direct.
+ * Les passages repris d'un tour d'origine (fork) n'ont pas d'horaire : ils sont posés à 0.
  */
-export function slots(run: RunState, stepByStep: boolean): Slot[] {
-  let cursor = 0
-  const out: Slot[] = []
-  for (const a of run.attempts) {
-    const real = a.durationMs ?? MIN_SLOT_MS
-    const dur = stepByStep ? Math.max(real, MIN_SLOT_MS) : Math.max(real, 1)
-    const prev = out.at(-1)
-    const parallel =
-      prev !== undefined &&
-      prev.lane === 0 &&
-      !a.reused &&
-      !prev.attempt.reused &&
-      prev.attempt.endTs !== null &&
-      a.startTs < prev.attempt.endTs
-    const start = parallel ? prev.start : cursor
-    const slot = { attempt: a, start, end: start + dur, lane: parallel ? 1 : 0 }
-    cursor = Math.max(cursor, slot.end)
-    out.push(slot)
-  }
-  return out
+export function slots(run: RunState, now = 0): Slot[] {
+  // En direct, une étape en cours s'étend jusqu'à l'horloge (`now`), pas seulement au dernier événement.
+  const latest = Math.max(now, ...run.attempts.map((a) => a.endTs ?? a.startTs))
+  const laneEnds: number[] = []
+  return run.attempts.map((a) => {
+    if (a.reused) return { attempt: a, start: 0, end: 0, lane: 0 }
+    const start = a.startTs
+    const end = Math.max(a.endTs ?? latest, start)
+    // Une étape en cours occupe sa ligne jusqu'à sa fin, encore inconnue.
+    const busyUntil = a.endTs === null ? Infinity : end
+    let lane = laneEnds.findIndex((e) => e <= start)
+    if (lane < 0) {
+      lane = laneEnds.length
+      laneEnds.push(busyUntil)
+    } else {
+      laneEnds[lane] = busyUntil
+    }
+    return { attempt: a, start, end, lane }
+  })
 }
 
 export function totalOf(s: Slot[]): number {

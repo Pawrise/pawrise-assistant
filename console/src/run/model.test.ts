@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseSseChunk } from '@/api/client'
 import type { DebugEvent } from '@/api/types'
-import { emptyRun, reduce, slots, snapshot, totalOf, MIN_SLOT_MS } from './model'
+import { emptyRun, reduce, slots, snapshot, totalOf } from './model'
 
 const NODES = [
   'circuit_breaker', 'query_understanding', 'retrieval', 'relevance_filter', 'generation',
@@ -36,13 +36,13 @@ const F: DebugEvent[] = [
 
 describe('modèle de tour', () => {
   const run = F.reduce(reduce, emptyRun)
-  const s = slots(run, true)
+  const s = slots(run)
   const total = totalOf(s)
 
   it('rejoue le parcours F jusqu’au bout', () => {
     expect(run.phase).toBe('done')
     expect(s).toHaveLength(10)
-    expect(total).toBe(10 * MIN_SLOT_MS)
+    expect(total).toBe(18) // le temps réel du serveur, pas un temps d'affichage
     const end = snapshot(run, s, total, NODES)
     expect(end.nodes.generation).toEqual({ view: 'ok', count: 2, ms: 4 })
     expect(end.nodes.guardrail.view).toBe('rejected')
@@ -55,16 +55,13 @@ describe('modèle de tour', () => {
   })
 
   it('montre le nœud en cours au milieu du tour, sans encore rien marquer comme non appelé', () => {
-    const mid = snapshot(run, s, 4.5 * MIN_SLOT_MS, NODES)
+    const mid = snapshot(run, s, 9, NODES)
     expect(mid.nodes.generation.view).toBe('running')
     expect(mid.nodes.safe_fallback.view).toBe('pending')
     expect(mid.active).toBe('relevance_filter->generation')
     expect(mid.ended).toBe(false)
   })
 
-  it('suit les vraies durées hors du mode pas à pas', () => {
-    expect(totalOf(slots(run, false))).toBe(20)
-  })
 })
 
 describe('fork', () => {
@@ -82,7 +79,7 @@ describe('fork', () => {
     expect(run.attempts.map((a) => [a.node, a.reused])).toEqual([
       ['circuit_breaker', true], ['query_understanding', true], ['generation', false],
     ])
-    const s = slots(run, true)
+    const s = slots(run)
     const snap = snapshot(run, s, totalOf(s), NODES)
     expect(snap.taken.has('query_understanding->generation')).toBe(true)
   })
@@ -104,7 +101,7 @@ describe("phrase d'attente du propriétaire", () => {
     start('finalize', 1, 2),
   ]
   const run = events.reduce(reduce, emptyRun)
-  const s = slots(run, true)
+  const s = slots(run)
 
   it('suit le dernier passage qui en a une, même pendant un nœud muet', () => {
     expect(snapshot(run, s, 0, NODES).waiting).toBe('Je rédige la réponse…')
@@ -114,7 +111,7 @@ describe("phrase d'attente du propriétaire", () => {
   it('disparaît une fois la réponse envoyée', () => {
     const finished = reduce(run, done('finalize', 1, 3))
     const end = reduce(finished, { type: 'run_finished', ts_ms: 4, response: null, summary: null })
-    const s2 = slots(end, true)
+    const s2 = slots(end)
     expect(snapshot(end, s2, totalOf(s2), NODES).waiting).toBeNull()
   })
 })

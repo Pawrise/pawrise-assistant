@@ -34,10 +34,11 @@ export function FlowPane({
   const [selected, setSelected] = useState<string | null>(null)
   const [legend, setLegend] = useState(false)
   const cursorRef = useRef(0)
-
-  const slots = useMemo(() => toSlots(run, true), [run])
-  const total = totalOf(slots)
   const live = run.phase === 'running'
+
+  // En direct, l'horloge du tour fait avancer les étapes en cours, même sans nouvel événement.
+  const slots = useMemo(() => toSlots(run, live ? cursor : 0), [run, live, cursor])
+  const total = totalOf(slots)
   const nodeIds = useMemo(() => topology?.nodes.map((n) => n.id) ?? [], [topology])
   const shape = useMemo(() => (topology ? shapeOf(topology.edges) : undefined), [topology])
   const snap = useMemo(() => snapshot(run, slots, cursor, nodeIds, shape), [run, slots, cursor, nodeIds, shape])
@@ -50,10 +51,12 @@ export function FlowPane({
   const shownId = entry?.id ?? null
   useEffect(() => {
     setSelected(null)
-    const start = live ? 0 : Number.MAX_SAFE_INTEGER
+    // Un message tout juste envoyé n'a pas encore démarré côté serveur (« idle ») : il se suit en direct.
+    const following = run.phase === 'running' || run.phase === 'idle'
+    const start = following ? 0 : Number.MAX_SAFE_INTEGER
     cursorRef.current = start
     setCursor(start)
-    setPlaying(live)
+    setPlaying(following)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seulement au changement d'échange
   }, [shownId])
 
@@ -62,7 +65,8 @@ export function FlowPane({
     let last = performance.now()
     let raf = 0
     const tick = (now: number) => {
-      const next = Math.min(cursorRef.current + (now - last), total)
+      // En direct, le temps avance librement ; en relecture, il s'arrête à la fin du tour.
+      const next = live ? cursorRef.current + (now - last) : Math.min(cursorRef.current + (now - last), total)
       last = now
       cursorRef.current = next
       setCursor(next)

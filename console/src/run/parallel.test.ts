@@ -30,13 +30,24 @@ const RUN: DebugEvent[] = [
 
 describe('branches parallèles', () => {
   const run = RUN.reduce(reduce, emptyRun)
-  const s = slots(run, true)
+  const s = slots(run)
 
   it('place les deux branches au même départ, sur deux lignes', () => {
     const cb = s.find((x) => x.attempt.node === 'circuit_breaker')!
     const qu = s.find((x) => x.attempt.node === 'query_understanding')!
     expect(qu.start).toBe(cb.start)
     expect([cb.lane, qu.lane]).toEqual([0, 1])
+  })
+
+  it('les montre en même temps dès le direct, avant qu’aucune ne soit finie', () => {
+    const live = RUN.slice(0, 5).reduce(reduce, emptyRun)
+    const lanes = slots(live).filter((x) => x.attempt.node !== 'redact').map((x) => x.lane)
+    expect(lanes).toEqual([0, 1])
+  })
+
+  it('place chaque étape à son heure réelle, et la suite revient sur la première ligne', () => {
+    const gate = s.find((x) => x.attempt.node === 'gate')!
+    expect([gate.start, gate.end, gate.lane]).toEqual([1401, 1402, 0])
   })
 
   it('trace les arêtes réelles, jonction comprise, et rien de plus', () => {
