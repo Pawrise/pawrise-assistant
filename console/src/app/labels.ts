@@ -41,6 +41,7 @@ export const NODE_ICON: Record<string, LucideIcon> = {
 
 export const ACTOR: Record<Actor, { label: string; chip: string; tile: string }> = {
   ai: { label: 'IA', chip: 'bg-violet-100 text-violet-800', tile: 'bg-violet-100 text-violet-700' },
+  mixed: { label: 'Règles + IA', chip: 'bg-violet-50 text-violet-800 ring-1 ring-violet-300', tile: 'bg-violet-50 text-violet-700' },
   rule: { label: 'Règle', chip: 'bg-zinc-100 text-zinc-700', tile: 'bg-zinc-100 text-zinc-700' },
   search: { label: 'Recherche', chip: 'bg-sky-100 text-sky-800', tile: 'bg-sky-100 text-sky-700' },
   text: { label: 'Texte fixe', chip: 'bg-amber-100 text-amber-900', tile: 'bg-amber-100 text-amber-800' },

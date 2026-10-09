@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from pawrise_assistant.graph.builder import ON_ERROR
 
 NodeKind = Literal["terminal", "step", "exit", "output", "tool", "router"]
-Actor = Literal["ai", "rule", "search", "text", "data"]
+Actor = Literal["ai", "mixed", "rule", "search", "text", "data"]
 
 
 class NodeMeta(BaseModel):
@@ -109,13 +109,13 @@ NODE_META: dict[str, tuple[str, NodeKind, str, int | None]] = {
 
 ACTORS: dict[str, Actor] = {
     "redact": "rule",
-    "circuit_breaker": "ai",
+    "circuit_breaker": "mixed",
     "query_understanding": "ai",
     "gate": "rule",
     "retrieval": "search",
     "relevance_filter": "search",
     "generation": "ai",
-    "guardrail": "ai",
+    "guardrail": "mixed",
     "safe_response": "text",
     "safe_response_escalate": "text",
     "safe_fallback": "text",
@@ -126,7 +126,8 @@ ACTORS: dict[str, Actor] = {
     "verify": "rule",
     "core_api": "data",
 }
-"""Qui fait le travail, pour la console : l'IA, une règle écrite, la recherche, un texte fixe."""
+"""Qui fait le travail, pour la console : l'IA, des règles d'abord puis l'IA (« mixed »), une règle
+écrite, la recherche, un texte fixe."""
 
 EDGE_LABELS: dict[tuple[str, str], str] = {
     ("redact", "circuit_breaker"): "en parallèle",

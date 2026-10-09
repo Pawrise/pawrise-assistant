@@ -4,7 +4,7 @@
 
 export type NodeKind = 'terminal' | 'step' | 'exit' | 'output' | 'tool' | 'router'
 /** Qui fait le travail : l'IA, une règle écrite, la recherche, un texte fixe, des données. */
-export type Actor = 'ai' | 'rule' | 'search' | 'text' | 'data'
+export type Actor = 'ai' | 'mixed' | 'rule' | 'search' | 'text' | 'data'
 export type EdgeKind = 'normal' | 'conditional' | 'error' | 'tool'
 
 export interface TopologyNode {
