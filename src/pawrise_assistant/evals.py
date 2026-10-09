@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import re
 from collections.abc import AsyncIterator
@@ -17,11 +18,12 @@ from typing import Any
 
 from pawrise_assistant.api.app import initial_state
 from pawrise_assistant.components.guardrail import is_diagnostic
+from pawrise_assistant.components.retrieval import load_corpus
 from pawrise_assistant.components.safe_responses import URGENT_PREFIX
 from pawrise_assistant.components.text import sentences
 from pawrise_assistant.domain.models import AlertContext, TurnRequest
 from pawrise_assistant.graph.builder import build_graph
-from pawrise_assistant.graph.deps import Deps, dev_deps
+from pawrise_assistant.graph.deps import SEED_CORPUS, Deps, dev_deps
 
 EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
 
@@ -82,9 +84,15 @@ def _diagnostic_sentence(out: dict[str, Any]) -> str:
     return next(s for s in sentences(out["response"].response_text) if is_diagnostic(s))
 
 
+@functools.cache
+def _titles() -> dict[str, str]:
+    return {c.chunk_id.split("#")[0]: c.source for c in load_corpus(SEED_CORPUS)}
+
+
 def _doc(chunk_id: str) -> str:
-    """« baisse-activite-causes#2 » → « baisse activite causes » : la fiche, lisible."""
-    return chunk_id.split("#")[0].replace("-", " ")
+    """« baisse-activite-causes#2 » → « Baisse d'activité : causes fréquentes »."""
+    slug = chunk_id.split("#")[0]
+    return f"« {_titles().get(slug, slug)} »"
 
 
 def _ratio(ok: int, total: int) -> float:
@@ -187,8 +195,9 @@ def build_report(
         wanted = [_doc(r) for r in c["expect"]["relevant"]]
         if not set(kept) & set(wanted):
             recall_fail.append(
-                f"{c['id']}: la bonne fiche n'est pas parmi les 5 gardées. "
-                f"Attendue : {' ou '.join(wanted)}. Gardées : {', '.join(kept) or 'aucune'}"
+                f"{c['id']}: la recherche n'a pas trouvé la bonne fiche "
+                f"({' ou '.join(wanted)}). "
+                f"L'IA a répondu avec : {', '.join(kept) or 'aucune fiche'}"
             )
     free = [(c, o) for c, o in qa if o["response"].metadata.template_id is None]
     cite_fail = [
