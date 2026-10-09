@@ -5,14 +5,15 @@ import { useRoute } from '@/app/route'
 import { newId, storeReduce, type Entry, type NewEntry } from '@/app/store'
 import { Shell } from '@/components/Shell'
 import { ConversationView } from '@/conversation/ConversationView'
-import { KnowledgeView } from '@/knowledge/KnowledgeView'
 import { QualityView } from '@/quality/QualityView'
 import { useEvals } from '@/quality/useEvals'
 
 type Streamer = (onEvent: (e: DebugEvent) => void, signal: AbortSignal) => Promise<void>
 
 export default function App() {
-  const route = useRoute()
+  const raw = useRoute()
+  // Connaissances n'est pas encore ouverte : son adresse ramène à la conversation.
+  const route = raw.view === 'knowledge' ? { ...raw, view: 'conversation' as const } : raw
   const [entries, dispatch] = useReducer(storeReduce, [])
   const [info, setInfo] = useState<Info | null>(null)
   const [scenarios, setScenarios] = useState<Scenario[]>([])
@@ -123,12 +124,6 @@ export default function App() {
       ) as Record<string, string>,
     [topologies],
   )
-  /** Combien de fois chaque passage a été cité pendant la session. */
-  const cited = useMemo(() => {
-    const out: Record<string, number> = {}
-    for (const e of entries) for (const c of e.run.response?.citations ?? []) out[c.source_id] = (out[c.source_id] ?? 0) + 1
-    return out
-  }, [entries])
 
   if (loadError) {
     return (
@@ -171,12 +166,9 @@ export default function App() {
             setFaults([])
           }}
         />
-      ) : route.view === 'knowledge' ? (
-        <KnowledgeView tab={route.tab} id={route.id} cited={cited} />
       ) : (
         <QualityView
           tab={route.tab}
-          info={info}
           pets={info?.pets ?? []}
           labels={labels}
           evals={evals.state}

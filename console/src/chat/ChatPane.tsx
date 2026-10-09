@@ -2,7 +2,6 @@ import { ArrowUp, ChevronRight, FileText, Siren, SquarePen, Stethoscope, X, Zap 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import type { Pet, Scenario } from '@/api/types'
 import { FAULTS, TONE, verdict } from '@/app/labels'
-import { href } from '@/app/route'
 import { liveStatus, type Entry } from '@/app/store'
 import { HandoffPanel } from '@/components/HandoffPanel'
 import { Logo } from '@/components/Logo'
@@ -122,15 +121,10 @@ function Reply({
                       {c.snippet}
                     </span>
                   ) : (
-                    <a
-                      href={href('knowledge', 'fiches', c.source_id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="block rounded-lg bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100"
-                    >
+                    <span className="block rounded-lg bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-600">
                       <span className="font-medium text-zinc-800">Fiche santé · </span>
                       {c.snippet}
-                      <span className="ml-1 font-medium text-violet-700">voir dans la base ›</span>
-                    </a>
+                    </span>
                   )}
                 </li>
               ))}

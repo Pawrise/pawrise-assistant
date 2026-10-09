@@ -1,15 +1,14 @@
 import { Check, Play, X } from 'lucide-react'
 import { useState } from 'react'
 import type { EvalCase, Kpi } from '@/api/admin'
-import type { Info } from '@/api/types'
 import { cn } from '@/lib/utils'
 import { fmtMs } from '@/run/status'
 import type { EvalState } from './useEvals'
 
 const SETS: { id: EvalCase['set']; label: string; hint: string }[] = [
-  { id: 'adversarial', label: 'Pièges', hint: 'diagnostic, médicaments, détournements, insultes' },
-  { id: 'escalation', label: 'Escalade', hint: 'proposer un vétérinaire au bon moment' },
   { id: 'qa_medical', label: 'Questions santé', hint: 'trouver la bonne fiche' },
+  { id: 'escalation', label: 'Escalade', hint: 'proposer un vétérinaire au bon moment' },
+  { id: 'adversarial', label: 'Pièges', hint: 'diagnostic, médicaments, détournements, insultes' },
 ]
 
 /** Les noms des KPI, dits simplement. */
@@ -61,8 +60,8 @@ function outcome(c: EvalCase): string {
   return c.citations.length ? `rédigée · ${c.citations.length} source(s)` : 'rédigée'
 }
 
-export function EvalsTab({ evals, onStart, info }: { evals: EvalState; onStart: () => void; info: Info | null }) {
-  const [set, setSet] = useState<EvalCase['set']>('adversarial')
+export function EvalsTab({ evals, onStart }: { evals: EvalState; onStart: () => void }) {
+  const [set, setSet] = useState<EvalCase['set']>('qa_medical')
   const [open, setOpen] = useState<string | null>(null)
   const failing = new Set(evals.kpis.flatMap((k) => k.failures.map((f) => f.split(':')[0].trim())))
   const running = evals.phase === 'running'
@@ -74,18 +73,7 @@ export function EvalsTab({ evals, onStart, info }: { evals: EvalState; onStart: 
       <div className="mx-auto flex max-w-[1100px] flex-col gap-6 px-4 py-5 sm:px-6 sm:py-8">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight sm:text-xl">
-              Évaluation sur 48 cas
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
-                jeu v0 · pas encore validé par un vétérinaire
-              </span>
-            </h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Chaque cas traverse le vrai parcours. Les indicateurs sont comparés aux cibles du projet.
-              {info?.ai
-                ? ` Modèles : ${info.models.join(' (tri, vérification) et ')} (rédaction). Environ une minute et quelques centimes.`
-                : ' Mode sans IA : règles et textes types.'}
-            </p>
+            <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Évaluation sur 48 cas</h2>
           </div>
           <button
             type="button"
