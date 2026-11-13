@@ -103,7 +103,11 @@ class LLMQueryUnderstanding:
         # y voient un simple échange courant. Le LLM seul ne peut pas en décider.
         ruled = await self.rules.understand(message, None)
         needs = out.needs_retrieval or ruled.needs_retrieval
-        return Understanding(query, needs, out.telemetry_days, out.alerts_days)
+        # Même logique pour les données du collier : « Comment va Rex aujourd'hui ? » doit les charger
+        # même si le petit modèle les juge inutiles (il s'y trompe) ; les règles repèrent l'état actuel.
+        telemetry = out.telemetry_days or ruled.telemetry_days
+        alerts = out.alerts_days or ruled.alerts_days
+        return Understanding(query, needs, telemetry, alerts)
 
 
 # — Nœud 5 —

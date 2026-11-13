@@ -58,6 +58,20 @@ async def test_rules_answer_first_and_llm_only_sees_what_they_let_through() -> N
     assert r.matched and r.matched.startswith("LLM")
 
 
+async def test_understanding_loads_collar_data_for_current_state_even_if_the_llm_skips_it() -> None:
+    skipped = UnderstandingOut(
+        canonical_query="comment va aujourd'hui",
+        needs_retrieval=True,
+        telemetry_days=None,
+        alerts_days=None,
+    )
+    p = ScriptedProvider({"UnderstandingOut": [skipped, skipped]})
+    u = await LLMQueryUnderstanding(p).understand("Comment va Kiba aujourd'hui ?", None)
+    assert (u.telemetry_days, u.alerts_days) == (2, 7)
+    u = await LLMQueryUnderstanding(p).understand("Est-ce que mon chien est trop gros ?", None)
+    assert (u.telemetry_days, u.alerts_days) == (7, 7)
+
+
 async def test_understanding_keeps_alert_context_whatever_the_llm_says() -> None:
     p = ScriptedProvider(
         {

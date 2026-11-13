@@ -29,7 +29,8 @@ _SMALL_TALK = re.compile(
 )
 _BEHAVIOUR = re.compile(
     r"\b(dort|sommeil|boite|bouge|actif|active|activite|mange|appetit|fatigue|halete|tousse|"
-    r"depuis|ces derniers|en ce moment|hier|aujourd hui|alerte|collier|coeur|cardiaque)\b"
+    r"depuis|ces derniers|en ce moment|hier|aujourd hui|alerte|collier|coeur|cardiaque|"
+    r"comment (il |elle )?va|va bien|etat|forme|sante|poids|gros|grosse|maigre|grossi|maigri)\b"
 )
 _CANON = {
     "sommeil": "temps de sommeil",
